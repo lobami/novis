@@ -89,4 +89,15 @@ if ! grep -q "NovisIR v1.0" /tmp/novis_ir.out; then
   exit 1
 fi
 
+bash -n "$ROOT/install.sh" >/dev/null
+if [ ! -x "$ROOT/install.sh" ]; then
+  chmod +x "$ROOT/install.sh"
+fi
+
+installed_version="$("$NOVIS" --help | head -n 1 | awk '{print $2}')"
+if [ -z "$installed_version" ]; then
+  echo "installed version is empty" >&2
+  exit 1
+fi
+
 echo "novis tests: ok"

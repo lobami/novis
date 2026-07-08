@@ -63,6 +63,20 @@ The repository ships an official installer that detects your platform, checks fo
 curl -fsSL https://raw.githubusercontent.com/lobami/novis/main/install.sh | bash
 ```
 
+The installer is **upgrade-aware**: it reads the version of the binary already on disk and the version declared in `src/main.cpp` on the cloned source. It will skip rebuilding when the local install is up to date, install when there is a newer release, and refuse to downgrade.
+
+Force a reinstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lobami/novis/main/install.sh | bash -s -- --force
+```
+
+Install a different branch (e.g. for early testing):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lobami/novis/main/install.sh | bash -s -- --channel dev
+```
+
 Manual uninstall:
 
 ```bash
