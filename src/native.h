@@ -315,15 +315,57 @@ private:
     }
 
     std::string emit_tensor_literal(TensorLiteral* t) {
+        // For small literals, inline each element as a Value. For large literals
+        // (>= 256 elements), emit a raw static double array. The Value-wrapper
+        // path is slow to compile for big literals.
+        const std::size_t threshold = 256;
         std::ostringstream ss;
-        ss << "([](){ Tensor tt; tt.shape = {" << t->elements.size() << "}; tt.data = {";
-        for (std::size_t i = 0; i < t->elements.size(); ++i) {
-            if (i) ss << ", ";
-            ss << nv_to_double(emit_expr(t->elements[i].get()));
+        if (t->elements.size() < threshold) {
+            ss << "([](){ Tensor tt; tt.shape = {" << t->elements.size() << "}; tt.data = {";
+            for (std::size_t i = 0; i < t->elements.size(); ++i) {
+                if (i) ss << ", ";
+                ss << nv_to_double(emit_expr(t->elements[i].get()));
+            }
+            ss << "}; return tt; }())";
+        } else {
+            // Raw numeric path: build a static array of doubles, then wrap.
+            // Only works if every element is a numeric literal (int or float).
+            // Non-literal elements fall back to the inline path.
+            bool all_literal = true;
+            for (const auto& el : t->elements) {
+                if (!dynamic_cast<IntLiteral*>(el.get()) &&
+                    !dynamic_cast<FloatLiteral*>(el.get())) {
+                    all_literal = false;
+                    break;
+                }
+            }
+            if (all_literal) {
+                int arr_id = tensor_arr_counter_++;
+                ss << "([](){ static const double _tv" << arr_id << "[] = {";
+                for (std::size_t i = 0; i < t->elements.size(); ++i) {
+                    if (i) ss << ", ";
+                    if (auto il = dynamic_cast<IntLiteral*>(t->elements[i].get())) {
+                        ss << il->value << ".0";
+                    } else if (auto fl = dynamic_cast<FloatLiteral*>(t->elements[i].get())) {
+                        ss << fl->value;
+                    }
+                }
+                ss << "}; Tensor tt; tt.shape = {" << t->elements.size()
+                   << "}; tt.data.assign(_tv" << arr_id << ", _tv" << arr_id
+                   << " + " << t->elements.size() << "); return tt; }())";
+            } else {
+                ss << "([](){ Tensor tt; tt.shape = {" << t->elements.size() << "}; tt.data = {";
+                for (std::size_t i = 0; i < t->elements.size(); ++i) {
+                    if (i) ss << ", ";
+                    ss << nv_to_double(emit_expr(t->elements[i].get()));
+                }
+                ss << "}; return tt; }())";
+            }
         }
-        ss << "}; return tt; }())";
         return ss.str();
     }
+
+    int tensor_arr_counter_ = 0;
 
     static std::string nv_to_double(const std::string& v) {
         return "nv_to_double(" + v + ")";

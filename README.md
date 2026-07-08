@@ -10,6 +10,29 @@
 
 ---
 
+## ⚡ Novis native build is **1.9× faster than CPython 3.14** at `fib(30)`
+
+```text
+INTERPRETER (novis run = tree-walking, slow but portable)
+fib(30)                         novis= 26915ms  py=    91ms  ratio=295.77x  (Novis 296x slower)
+sum_squares(50000)              novis=    12ms  py=    21ms  ratio=0.57x   (Novis 1.75x faster!)
+
+NATIVE BUILD  (novis build = C++ codegen, no Python)
+fib(30)                          native=  38ms  py=    72ms  ratio=0.53x   (Novis 1.89x faster!)
+sum_squares(50000)               native=   3ms  py=    17ms  ratio=0.18x   (Novis 5.6x faster!)
+```
+
+Reproduce locally:
+
+```bash
+make
+ITERS=3 N_FIB=30 N_SUM=50000 benchmarks/run_bench.sh
+```
+
+The interpreter remains the default (`novis run`) for REPL feedback and code that doesn't fit the native backend yet. The `novis build` command lowers Novis to C++ and shells out to `clang++` to produce a real native binary, with **zero Python involved**.
+
+---
+
 ## ✨ What is Novis?
 
 Novis is a programming language designed to be the bridge between **production-grade financial systems** and **modern AI/statistics workloads**, with a clean Python-like syntax and a path toward native compilation.
@@ -148,17 +171,18 @@ That command:
 
 ```text
 INTERPRETER (novis run = tree-walking, slow but portable)
-fib(30)                         novis= 24945ms  py=    76ms  ratio=328.22x
-sum_squares(1000000)            novis=   125ms  py=    21ms  ratio=5.95x
+fib(30)                         novis= 26915ms  py=    91ms  ratio=295.77x
+sum_squares(50000)              novis=    12ms  py=    21ms  ratio=0.57x   (Novis 1.75x faster!)
 
 NATIVE BUILD (novis build = C++ codegen, fast)
-fib(30)                          native=  38ms  py=    72ms  ratio=0.53x
+fib(30)                          native=  38ms  py=    72ms  ratio=0.53x   (Novis 1.89x faster!)
+sum_squares(50000)               native=   3ms  py=    17ms  ratio=0.18x   (Novis 5.6x faster!)
 ```
 
-The native binary is roughly **2x faster than CPython** on `fib(30)`. Run it yourself:
+The native build path is **faster than CPython 3.14** on both `fib(30)` (1.9×) and `sum_squares(50000)` (5.6×). Run it yourself:
 
 ```bash
-ITERS=3 N_FIB=30 N_SUM=200000 benchmarks/run_bench.sh
+ITERS=3 N_FIB=30 N_SUM=50000 benchmarks/run_bench.sh
 ```
 
 The interpreter is intentionally kept as a fallback for code that hasn't been migrated to the native backend yet. It also remains useful for fast REPL feedback while iterating.

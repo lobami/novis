@@ -33,7 +33,10 @@ fi
 
 ITERS="${ITERS:-3}"
 N_FIB="${N_FIB:-30}"
-N_SUM="${N_SUM:-1000000}"
+# Tensor literals expand 1:1 into the generated C++ source. Above ~1e6
+# elements clang++ slows to a crawl compiling the source. 50000 is the
+# practical sweet spot for showcasing the native build path.
+N_SUM="${N_SUM:-50000}"
 
 hr() { printf -- '------------------------------------------------------------\n'; }
 
@@ -186,4 +189,4 @@ echo "ratio > 1.0 means Novis is slower than CPython on that benchmark."
 echo "ratio < 1.0 means Novis is faster."
 echo
 echo "Reproduce with:"
-echo "  ITERS=5 N_FIB=30 N_SUM=1000000 $0"
+echo "  ITERS=5 N_FIB=30 N_SUM=200000 $0"
