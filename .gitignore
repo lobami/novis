@@ -11,3 +11,7 @@ novis
 .DS_Store
 .vscode/
 .idea/
+
+# Novis project environment
+.novis/build/
+.novis/cache/

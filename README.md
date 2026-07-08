@@ -55,7 +55,21 @@ Most financial systems stay on legacy stacks because they are predictable and au
 
 ## ⚡ Quick start
 
-### 1. Build
+### 0. Install (one liner)
+
+The repository ships an official installer that detects your platform, checks for `git` and a C++17 compiler, clones, builds, runs the test suite, and installs the `novis` binary to `/usr/local/bin` (or `~/.local/bin` if you don't have write access there).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lobami/novis/main/install.sh | bash
+```
+
+Manual uninstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lobami/novis/main/install.sh | bash -s -- --uninstall
+```
+
+### 1. Build from source
 
 ```bash
 make
