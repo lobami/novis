@@ -1,66 +1,67 @@
+<div align="center">
+
 # Novis
 
-**Created by Loth Mejía Martínez · México · 2026**
+**A compiled, strongly typed language for financial systems, AI, statistics, and the Web.**
 
-Novis is a compiled, strongly typed programming language for the next generation of financial systems, AI workloads, statistical computing, and WebAssembly-first applications.
+*Created by Loth Mejía Martínez · México · 2026*
 
-The goal is simple: keep the clean readability people like from Python, but move the language toward native speed, deterministic financial primitives, strong type contracts, and modern tooling.
-
-Novis is currently a production-oriented compiler prototype: it has a lexer, parser, AST, semantic type checker, interpreter/runtime, module resolver, native-provider package facade, project environment, and a textual IR backend (`NovisIR`) ready to evolve toward LLVM/Wasm.
+</div>
 
 ---
 
-## Why Novis?
+## ✨ What is Novis?
 
-Most financial institutions still depend on old systems because they are predictable, auditable, and stable. Most modern AI/data ecosystems are productive because they are expressive and rich. Novis is designed to connect those worlds:
+Novis is a programming language designed to be the bridge between **production-grade financial systems** and **modern AI/statistics workloads**, with a clean Python-like syntax and a path toward native compilation.
 
-- **Banking-grade primitives**: `money`, `decimal`, banker's rounding, currency-safe arithmetic.
-- **AI/statistics first**: `Tensor<f32>`, `mean`, `variance`, `dot`, `softmax`, `risk_score`, and native-provider facades for Python ecosystem names.
-- **Strong typing with inference**: write fast, but keep contracts checkable.
-- **Framework-ready types**: `type`, `interface`, `pub`, generics, and module imports.
-- **No CPython dependency**: `importpy` installs Novis-native facades instead of running Python underneath.
-- **WebAssembly/LLVM-ready design**: current backend emits `NovisIR`; future backend can lower typed IR to LLVM or Wasm.
+Most financial systems stay on legacy stacks because they are predictable and auditable. Most modern AI/data stacks stay dynamic because they are expressive. Novis wants both:
 
----
+| Domain                | Novis primitive                                                                                   |
+|-----------------------|---------------------------------------------------------------------------------------------------|
+| Banking               | `money`, `decimal`, `round_bankers`, `is_balanced`, currency-safe arithmetic                      |
+| AI / statistics       | `Tensor<f32>`, `mean`, `variance`, `stddev`, `dot`, `softmax`, `relu`, `sigmoid`, `risk_score`    |
+| Framework contracts   | `type`, `interface`, `pub`, generic annotations like `List<T>`, `Result<T, E>`, `Tensor<f32>`     |
+| Module isolation      | `import std.bank`, `.novis/packages/<name>/mod.novis`, `importpy` native provider facade         |
+| Compilation pipeline  | Lexer → Parser → AST → Type checker → Runtime → **`NovisIR`** (ready to lower to LLVM or Wasm)    |
 
-## Current status
-
-Novis is not claiming to be a finished Go/Rust/Python replacement yet. It is a serious language prototype with a working end-to-end toolchain.
-
-Implemented today:
-
-- Indentation-aware lexer.
-- Recursive descent + Pratt parser.
-- AST with visitors.
-- Static type checker.
-- User-defined functions.
-- Banking and AI runtime primitives.
-- Module resolver.
-- Embedded standard library modules.
-- `importpy` native-provider installer.
-- `.novis` project environment.
-- `NovisIR` textual backend.
-- Test suite via `make test`.
-
-Not implemented yet:
-
-- Native LLVM code generation.
-- Real Wasm emitter.
-- Full async scheduler for `spawn` / `await`.
-- Real Arrow/BLAS/ONNX/libtorch bindings behind `importpy` providers.
-- Package publishing/registry.
+> **No CPython, no Jython, no PyPy under the hood.** Novis never shells out to Python. `importpy` installs a Novis-native facade with the name of the Python package you know.
 
 ---
 
-## Quick start
+## 📦 Status
 
-### Build
+> **Production-oriented compiler prototype.** End-to-end toolchain is working. Native codegen to LLVM/Wasm is the next step.
+
+<table>
+  <tr><th>Component</th><th>Status</th></tr>
+  <tr><td>Indentation-aware lexer</td><td>✅ Done</td></tr>
+  <tr><td>Pratt parser + recursive descent</td><td>✅ Done</td></tr>
+  <tr><td>AST with visitors</td><td>✅ Done</td></tr>
+  <tr><td>Static type checker (nominal + generics)</td><td>✅ Done</td></tr>
+  <tr><td>User-defined functions</td><td>✅ Done</td></tr>
+  <tr><td>Banking + AI runtime primitives</td><td>✅ Done</td></tr>
+  <tr><td>Module resolver + embedded stdlib</td><td>✅ Done</td></tr>
+  <tr><td><code>novis env</code> project environment</td><td>✅ Done</td></tr>
+  <tr><td><code>novis importpy</code> native provider facade</td><td>✅ Done</td></tr>
+  <tr><td><code>NovisIR</code> textual backend</td><td>✅ Done</td></tr>
+  <tr><td>Test suite (<code>make test</code>)</td><td>✅ Green</td></tr>
+  <tr><td>LLVM codegen</td><td>⏳ Next</td></tr>
+  <tr><td>Wasm codegen</td><td>⏳ Next</td></tr>
+  <tr><td>Async runtime (<code>spawn</code>/<code>await</code>)</td><td>⏳ Next</td></tr>
+  <tr><td>Real Arrow/BLAS/ONNX/libtorch bindings</td><td>⏳ Next</td></tr>
+</table>
+
+---
+
+## ⚡ Quick start
+
+### 1. Build
 
 ```bash
 make
 ```
 
-### Run tests
+### 2. Run the test suite
 
 ```bash
 make test
@@ -72,13 +73,11 @@ Expected output:
 novis tests: ok
 ```
 
-### Start the REPL
+### 3. Start the REPL
 
 ```bash
 ./novis
 ```
-
-Example:
 
 ```text
 Novis 1.0.0 — type 'exit' or Ctrl-D to quit
@@ -90,29 +89,41 @@ Created by Loth Mejía Martínez · México · 2026
 Bye.
 ```
 
----
-
-## CLI
+### 4. Run a script
 
 ```bash
-./novis                         # REPL
-./novis run <file.novis>         # type-check and execute
-./novis check <file.novis>       # type-check only
-./novis emit-ir <file.novis>     # emit NovisIR
-./novis importpy <package>       # install native provider facade
-./novis importpy --list          # list known native providers
-./novis env init                 # create .novis project environment
-./novis env info                 # show environment status
-./novis env list                 # list installed native providers
+./novis run examples/bank_risk.novis
 ```
 
-`./novis <file.novis>` is an alias for `./novis run <file.novis>`.
+Output:
+
+```text
+true
+```
 
 ---
 
-## A first Novis program
+## 🧰 CLI
 
-Create `risk.novis`:
+```text
+novis                              # REPL
+novis run <file.novis>              # type-check and execute
+novis check <file.novis>            # type-check only
+novis emit-ir <file.novis>          # emit NovisIR
+novis importpy <package>            # install native provider facade
+novis importpy --list               # list known native providers
+novis env init                      # create .novis project environment
+novis env info                      # show environment status
+novis env list                      # list installed native providers
+novis <file.novis>                  # alias for run
+novis --emit-ir <file.novis>        # legacy flag alias
+```
+
+---
+
+## 🧪 Demo: banking + AI
+
+This is the `examples/bank_risk.novis` demo. It blends a financial request, a tensor feature vector, and a custom approval rule. The same shape works for real credit scoring pipelines.
 
 ```novis
 import std.bank
@@ -139,7 +150,7 @@ print(approve(application_amount, features))
 Run it:
 
 ```bash
-./novis run risk.novis
+./novis run examples/bank_risk.novis
 ```
 
 Output:
@@ -148,25 +159,162 @@ Output:
 true
 ```
 
-Type-check without running:
+Type-check only:
 
 ```bash
-./novis check risk.novis
+./novis check examples/bank_risk.novis
+```
+
+Output:
+
+```text
+ok: examples/bank_risk.novis checked (modules: std.bank std.core std.ai std.math)
 ```
 
 Emit IR:
 
 ```bash
-./novis emit-ir risk.novis
+./novis emit-ir examples/bank_risk.novis
+```
+
+Output (excerpt):
+
+```text
+; NovisIR v1.0
+; Created by Loth Mejía Martínez · México · 2026
+; target: wasm-first | llvm-ready | banking-ai-runtime | framework-ready-types | module-aware
+module @main {
+  pub type @CreditApplication {
+    pub id: str
+    requested: money(decimal(scale=6), currency)
+    features: Tensor<f32>
+  }
+  pub fn @approve(%requested: money(decimal(scale=6), currency), %features: Tensor<f32>) -> bool {
+    ...
+  }
+}
 ```
 
 ---
 
-## Language tour
+## 🧮 Demo: tensors, statistics, scoring
+
+`tests/banking_ai.novis`
+
+```novis
+import std.bank
+import std.ai
+import std.math
+
+capital: money = money("1000.00", "MXN")
+fee: money = money("12.345", "MXN")
+total: money = round_bankers(capital + fee, 2)
+
+features: Tensor<f32> = [1, 2, 3]
+weights: Tensor<f32> = [0.1, 0.2, 0.3]
+score: f32 = classify(features, weights)
+
+print(total)
+print(clamp(score, 0, 1))
+print(balanced(total, debit(total)))
+```
+
+```text
+MXN 1012.34
+0.802183888559
+true
+```
+
+---
+
+## 🐼 Demo: `importpy` native providers
+
+You can ask Novis to install a familiar Python package name. It does **not** pull CPython; it writes a Novis-native facade under `.novis/packages/`.
+
+```bash
+./novis importpy pandas numpy
+```
+
+```text
+✓ importpy installed: pandas
+  Pyra module: import pandas
+  Native provider: novis.data.arrow
+  Backend: Apache Arrow native memory + Novis kernels
+  Python runtime required: no
+
+✓ importpy installed: numpy
+  Pyra module: import numpy
+  Native provider: novis.tensor.native
+  Backend: Accelerate/OpenBLAS/oneDNN/Wasm SIMD
+  Python runtime required: no
+```
+
+> The line that reads `Pyra module: import ...` is the visible user message. The internal provider name is `novis.*`.
+
+Use it:
+
+```novis
+import pandas
+import numpy
+
+xs: Tensor<f32> = [1, 2, 3, 4]
+ys: Tensor<f32> = [0.1, 0.2, 0.3, 0.4]
+
+print(pd_mean(xs), pd_count(xs), np_dot(xs, ys))
+```
+
+```text
+2.5 4 3
+```
+
+Try an unknown package:
+
+```bash
+./novis importpy paquete_raro
+```
+
+```text
+error: no native importpy provider for 'paquete_raro'
+help: run `pyra importpy --list` to see supported packages.
+note: Pyra will not silently fall back to CPython because this language is designed to stay compiled/native.
+```
+
+> Novis fails loudly. No silent CPython fallback. That is by design.
+
+---
+
+## 🧱 Demo: domain models + interfaces + generics
+
+`tests/framework_contracts.novis`
+
+```novis
+import std.core
+
+pub type Account:
+    pub id: str
+    balance: money
+    tags: List<str>
+
+pub interface Repository<T>:
+    fn find(id: str) -> Option<T>
+    fn save(item: T) -> Result<T, Error>
+
+pub fn identity_account<T>(item: T) -> T:
+    return item
+
+value: money = money("25.00", "USD")
+print(identity_account(value))
+```
+
+```text
+USD 25.00
+```
+
+---
+
+## 📚 Language tour
 
 ### Variables and inference
-
-Use `:=` for inferred declarations and `:` + `=` for explicit typed declarations.
 
 ```novis
 age := 25
@@ -175,45 +323,30 @@ score: f32 = 0.87
 active: bool = true
 ```
 
-### Banking types
+`:=` is inferred; `:` + `=` is explicit. Both work in any scope.
+
+### Banking arithmetic
 
 ```novis
 subtotal: money = money("1000.00", "MXN")
 fee: money = money("12.345", "MXN")
 total: money = round_bankers(subtotal + fee, 2)
-
 print(total)
 ```
-
-Output:
 
 ```text
 MXN 1012.34
 ```
 
-`money` values carry currency. Novis rejects unsafe initialization like:
+Bad usage is caught by the type checker:
 
 ```novis
 bad: money = decimal("10.00")
 ```
 
-Diagnostic example:
-
 ```text
 error: type error: Cannot initialize 'bad' of type money with decimal
 help: money values need an explicit currency, e.g. money("10.00", "MXN")
-```
-
-### Tensors and statistics
-
-```novis
-xs: Tensor<f32> = [1, 2, 3, 4]
-weights: Tensor<f32> = [0.1, 0.2, 0.3, 0.4]
-
-print(mean(xs))
-print(variance(xs))
-print(dot(xs, weights))
-print(softmax([1, 2, 3]))
 ```
 
 ### Functions
@@ -226,31 +359,45 @@ features: Tensor<f32> = [10000, 2500, 1]
 print(risk_for(features))
 ```
 
-### Domain models
+### Domain models and contracts
 
 ```novis
 pub type Account:
     pub id: str
     balance: money
     risk_features: Tensor<f32>
-```
 
-### Interfaces and generics
-
-```novis
 pub interface Repository<T>:
     fn find(id: str) -> Option<T>
     fn save(item: T) -> Result<T, Error>
+```
 
-pub fn identity<T>(value: T) -> T:
-    return value
+### `pub` for stable APIs
+
+```novis
+pub type Account: ...
+pub interface Repository<T>: ...
+pub fn approve(...) -> bool: ...
 ```
 
 ---
 
-## Modules
+## 📐 Builtins (runtime)
 
-Novis supports imports:
+| Category | Functions |
+|---|---|
+| I/O | `print`, `read_text`, `write_text` |
+| Containers | `len` |
+| Math | `sqrt`, `pow` |
+| Banking | `decimal`, `money`, `currency`, `round_bankers`, `is_balanced` |
+| Tensor | `tensor` / `Tensor`, `shape`, `sum`, `mean`, `variance`, `stddev`, `min`, `max`, `dot` |
+| AI | `relu`, `sigmoid`, `softmax`, `argmax`, `risk_score` |
+
+All are native, no Python involved.
+
+---
+
+## 🧩 Modules and `importpy` providers
 
 ```novis
 import std.bank
@@ -259,35 +406,49 @@ import std.math
 from std.core import Option
 ```
 
-Current embedded modules:
+Embedded modules: `std.core`, `std.bank`, `std.ai`, `std.math`, `std.http`, `std.fs`, `std.string`.
 
-- `std.core`
-- `std.bank`
-- `std.ai`
-- `std.math`
-- `std.http`
-- `std.fs`
-- `std.string`
-
-The resolver also looks for local modules:
+Resolver order for `import foo.bar`:
 
 ```text
-module_name.novis
-module_name/mod.novis
-.novis/packages/module_name/mod.novis
+./foo/bar.novis
+./foo/bar/mod.novis
+./.novis/packages/foo/bar.novis
+./.novis/packages/foo/bar/mod.novis
+foo/bar.novis
+foo/bar/mod.novis
 ```
+
+`importpy` currently maps:
+
+| Python name | Native provider | Runtime |
+|---|---|---|
+| `numpy` | `novis.tensor.native` | Native |
+| `pandas` | `novis.data.arrow` | Native |
+| `scipy` | `novis.science.native` | Native |
+| `torch` | `novis.ai.libtorch_or_onnx` | Native |
+| `sklearn` | `novis.ai.onnx` | Native |
+| `requests` | `novis.http.native` | Native |
+| `cryptography` | `novis.crypto.native` | Native |
 
 ---
 
-## Project environments
-
-Create an isolated Novis project environment:
+## 🌍 Project environment (`novis env`)
 
 ```bash
 ./novis env init
 ```
 
-This creates:
+```text
+✓ Novis env ready
+  Created by: Loth Mejía Martínez · México · 2026
+  Root: .
+  Manifest: ./.novis/env.toml
+  Packages: ./.novis/packages
+  Python runtime: not required
+```
+
+Layout:
 
 ```text
 .novis/
@@ -299,141 +460,124 @@ This creates:
   bin/
 ```
 
-Show status:
-
-```bash
-./novis env info
-```
-
-List installed native providers:
-
-```bash
-./novis env list
-```
-
-This environment is not a Python virtualenv. It does not create, embed, or require CPython.
+This is **not** a Python virtualenv. It is a project-isolated directory for Novis-native artifacts. `python_runtime = false` is enforced in `env.toml`.
 
 ---
 
-## `importpy`: Python ecosystem names, native Novis providers
-
-Novis can install familiar Python package facades while keeping execution native:
-
-```bash
-./novis importpy pandas numpy
-```
-
-This installs generated Novis modules under:
+## 🏗 Architecture
 
 ```text
-.novis/packages/pandas/mod.novis
-.novis/packages/numpy/mod.novis
+            source.novis
+                 │
+            ┌────▼────┐
+            │ Lexer   │  indentation-aware tokens
+            └────┬────┘
+                 │
+            ┌────▼────┐
+            │ Parser  │  Pratt expressions + recursive descent
+            └────┬────┘
+                 │
+            ┌────▼────┐
+            │   AST   │  visitor-friendly nodes
+            └────┬────┘
+                 │
+            ┌────▼────────┐
+            │ Type check  │  nominal + generics + contracts
+            └────┬────────┘
+                 │
+            ┌────▼───────┐
+            │ Evaluator  │  money/decimal/tensor runtime
+            └────┬───────┘
+                 │
+            ┌────▼─────┐
+            │ NovisIR  │  textual typed IR
+            └────┬─────┘
+                 │
+        (next) LLVM or Wasm
 ```
 
-Then use them in source code:
-
-```novis
-import pandas
-import numpy
-
-xs: Tensor<f32> = [1, 2, 3, 4]
-ys: Tensor<f32> = [0.1, 0.2, 0.3, 0.4]
-
-print(pd_mean(xs), pd_count(xs), np_dot(xs, ys))
-```
-
-Current native providers in `importpy --list`:
-
-| Python package | Native provider name                          | Python runtime required |
-|----------------|------------------------------------------------|-------------------------|
-| numpy          | `novis.tensor.native`                          | No                      |
-| pandas         | `novis.data.arrow`                             | No                      |
-| scipy          | `novis.science.native`                         | No                      |
-| torch          | `novis.ai.libtorch_or_onnx`                    | No                      |
-| sklearn        | `novis.ai.onnx`                                | No                      |
-| requests       | `novis.http.native`                            | No                      |
-| cryptography   | `novis.crypto.native`                          | No                      |
-
-If you request an unknown package, Novis fails with a clear error and does not silently fall back to CPython. That is by design: Novis is designed to stay native.
-
----
-
-## Architecture overview
+Source layout:
 
 ```text
-source.novis
-    ↓
-Lexer          (indentation-aware tokens)
-    ↓
-Parser         (Pratt expressions + recursive descent)
-    ↓
-AST            (visitor-friendly nodes)
-    ↓
-Type Checker   (nominal types, interfaces, generics, contracts)
-    ↓
-Evaluator      (runtime / interpreter)
-    ↓
-NovisIR        (typed text IR, ready to lower to LLVM or Wasm)
+src/
+  token.h          # token kinds
+  lexer.h          # indentation-aware lexing
+  ast.h            # AST + visitors
+  parser.h         # statements + expressions
+  typechecker.h    # type rules + generic unification
+  evaluator.h      # runtime + money/decimal/tensor primitives
+  compiler.h       # NovisIR emitter
+  module_resolver.h# imports + embedded stdlib
+  importpy.h       # native provider registry + installer
+  env.h            # novis env project environment
+  diagnostics.h    # friendly error rendering
+  main.cpp         # CLI (the only compiled file)
 ```
 
-All of the above live in `src/`:
-
-- `token.h` / `lexer.h` — token kinds and indentation-aware lexing.
-- `ast.h` — AST nodes and visitors.
-- `parser.h` — statement and expression parser.
-- `typechecker.h` — type rules, registry, generic unification.
-- `evaluator.h` — runtime, money/decimal/tensor semantics, builtins.
-- `compiler.h` — `NovisIR` emitter.
-- `module_resolver.h` — imports and embedded standard library.
-- `importpy.h` — `importpy` native-provider registry and installer.
-- `env.h` — `novis env` project environment manager.
-- `diagnostics.h` — friendly error rendering.
-- `main.cpp` — CLI entry point.
-
-`main.cpp` is the only file compiled. Everything else is header-only for fast rebuilds.
+Header-only design: only `main.cpp` is compiled. Edits to `.h` files trigger a single recompilation of `main.cpp`.
 
 ---
 
-## Roadmap
+## 🛣 Roadmap
 
-Short term:
+**Now**
 
 - Real Wasm emitter.
-- Real LLVM backend (replacing the textual `NovisIR` once a typed IR is stable).
-- Real async runtime for `spawn` / `await`.
+- Replace textual `NovisIR` with a typed IR ready for LLVM lowering.
+- Async runtime for `spawn` / `await`.
+
+**Next**
+
 - Native bindings: Arrow, BLAS, libtorch/ONNX, OpenSSL.
-
-Medium term:
-
-- Borrow-style ownership for performance-critical kernels.
-- Per-module type checking of imported names.
+- Borrow-style ownership for hot kernels.
 - Package registry + `novis add` over the wire.
 
-Long term:
+**Later**
 
-- Audit trail and source mapping suitable for financial compliance reviews.
-- Full self-hosted compiler (Novis compiler written in Novis).
+- Audit trail + source maps for financial compliance reviews.
+- Self-hosted compiler (Novis written in Novis).
 
 ---
 
-## Contributing
+## 🧪 Tests
 
-Novis is an early-stage language. Most of the value right now is in:
+Run the full suite:
 
-- Adding primitives to the type checker / runtime / IR.
-- Writing more language tests under `tests/`.
-- Adding new `importpy` native providers.
-- Replacing the textual `NovisIR` emitter with a real backend.
+```bash
+make test
+```
 
-Workflow:
+Coverage:
 
-1. Build: `make`
-2. Run tests: `make test`
-3. Add a test under `tests/` and a corresponding entry in `tests/run_tests.sh`.
+| Test                          | What it checks                                                |
+|-------------------------------|---------------------------------------------------------------|
+| `tests/banking_ai.novis`      | Banking math, tensor scoring, balanced ledger                 |
+| `tests/framework_contracts.novis` | `type`, `interface`, generic functions                   |
+| `tests/stdlib_fs_string.novis`| Embedded stdlib for `fs` and `string`                         |
+| `tests/importpy_native.novis` | `importpy` native providers in real source                    |
+| `tests/diagnostic_bad.novis`  | Friendly type error with help text                            |
+| `examples/bank_risk.novis`    | Banking + AI demo referenced by `make test`                   |
+
+---
+
+## 🤝 Contributing
+
+1. `make`
+2. `make test`
+3. Add a test under `tests/` and wire it in `tests/run_tests.sh`.
 4. Keep the header-only architecture; touch `main.cpp` only for CLI plumbing.
+5. Add new builtins in `evaluator.h` and their type rules in `typechecker.h`.
+6. Add new `importpy` providers in `importpy.h`.
+
+The most valuable contributions right now are:
+
+- More language tests.
+- New runtime primitives.
+- New `importpy` native providers.
+- A real Wasm or LLVM backend.
 
 ---
 
-## License
+## 🪪 License
 
-This project is provided as a working compiler prototype by Loth Mejía Martínez, México, 2026. Use it, fork it, teach with it, build on it.
+Prototype by Loth Mejía Martínez, México, 2026. Use it, fork it, teach with it, build on it.
