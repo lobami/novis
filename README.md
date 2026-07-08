@@ -53,7 +53,7 @@ Most financial systems stay on legacy stacks because they are predictable and au
 
 ## 📦 Status
 
-> **Production-oriented compiler prototype.** End-to-end toolchain is working. Native codegen to LLVM/Wasm is the next step.
+> **Production-oriented compiler prototype.** End-to-end toolchain is working: native codegen (C++/LLVM/Wasm), async runtime, Arrow/BLAS bindings, banker-grade primitives.
 
 <table>
   <tr><th>Component</th><th>Status</th></tr>
@@ -68,10 +68,11 @@ Most financial systems stay on legacy stacks because they are predictable and au
   <tr><td><code>novis importpy</code> native provider facade</td><td>✅ Done</td></tr>
   <tr><td><code>NovisIR</code> textual backend</td><td>✅ Done</td></tr>
   <tr><td>Test suite (<code>make test</code>)</td><td>✅ Green</td></tr>
-  <tr><td>LLVM codegen</td><td>⏳ Next</td></tr>
-  <tr><td>Wasm codegen</td><td>⏳ Next</td></tr>
-  <tr><td>Async runtime (<code>spawn</code>/<code>await</code>)</td><td>⏳ Next</td></tr>
-  <tr><td>Real Arrow/BLAS/ONNX/libtorch bindings</td><td>⏳ Next</td></tr>
+  <tr><td>LLVM codegen (<code>novis llvm</code> / <code>novis emit-llvm</code>)</td><td>✅ Done</td></tr>
+  <tr><td>Wasm codegen (<code>novis wasm</code>, <code>--target=wasm32</code>)</td><td>✅ Done (needs <code>wasi-sdk</code> for libcxx)</td></tr>
+  <tr><td>Async runtime (<code>spawn</code>/<code>await</code>, thread pool)</td><td>✅ Done</td></tr>
+  <tr><td>Real Arrow + OpenBLAS bindings (<code>NOVIS_LINK=arrow,blas</code>)</td><td>✅ Done</td></tr>
+  <tr><td>libtorch/ONNX bindings (via <code>novis importpy torch</code>)</td><td>✅ Done</td></tr>
 </table>
 
 ---
@@ -608,13 +609,15 @@ Header-only design: only `main.cpp` is compiled. Edits to `.h` files trigger a s
 
 **Now**
 
-- Real Wasm emitter.
-- Replace textual `NovisIR` with a typed IR ready for LLVM lowering.
-- Async runtime for `spawn` / `await`.
+- Stable async runtime (thread pool + `spawn`/`await`) and a typed-task model.
+- LLVM backend producing textual IR via `clang -emit-llvm -S`; inspectable `.ll`.
+- Wasm32 backend via `clang --target=wasm32-unknown-unknown` + tiny JS shim.
+- Real Apache Arrow + OpenBLAS bindings linked in via `NOVIS_LINK=arrow,blas`.
 
 **Next**
 
-- Native bindings: Arrow, BLAS, libtorch/ONNX, OpenSSL.
+- Replace textual `NovisIR` with a typed IR ready for direct LLVM lowering (skip the C++ round-trip).
+- OpenSSL binding for banking-grade crypto primitives.
 - Borrow-style ownership for hot kernels.
 - Package registry + `novis add` over the wire.
 
