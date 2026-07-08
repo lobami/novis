@@ -30,6 +30,8 @@ public:
     virtual void visitUnaryExpr(struct UnaryExpr&) = 0;
     virtual void visitCallExpr(struct CallExpr&) = 0;
     virtual void visitAssignExpr(struct AssignExpr&) = 0;
+    virtual void visitSpawnExpr(struct SpawnExpr&) = 0;
+    virtual void visitAwaitExpr(struct AwaitExpr&) = 0;
 };
 
 class StmtVisitor {
@@ -163,6 +165,22 @@ struct CallExpr : Expr {
     CallExpr(std::unique_ptr<Expr> c, std::vector<std::unique_ptr<Expr>> a)
         : callee(std::move(c)), args(std::move(a)) {}
     void accept(ExprVisitor& v) override { v.visitCallExpr(*this); }
+};
+
+// `spawn` expr: a zero-arg lambda call that runs asynchronously and yields a
+// `Task<T>`. The result is a first-class value you can `await` later.
+struct SpawnExpr : Expr {
+    std::unique_ptr<Expr> callee;
+    SpawnExpr(std::unique_ptr<Expr> c) : callee(std::move(c)) {}
+    void accept(ExprVisitor& v) override { v.visitSpawnExpr(*this); }
+};
+
+// `await` expr: blocks the current fiber until a `Task<T>` resolves and
+// produces the underlying value. Errors are rethrown as runtime errors.
+struct AwaitExpr : Expr {
+    std::unique_ptr<Expr> task;
+    AwaitExpr(std::unique_ptr<Expr> t) : task(std::move(t)) {}
+    void accept(ExprVisitor& v) override { v.visitAwaitExpr(*this); }
 };
 
 struct AssignExpr : Expr {

@@ -27,7 +27,8 @@
 #include "parser.h"
 #include "token.h"
 #include "typechecker.h"
-
+#include "llvm.h"
+#include "wasm.h"
 namespace {
 
 constexpr const char* NOVIS_VERSION = "1.0.0";
@@ -303,6 +304,9 @@ void print_help() {
     std::printf("  novis build <file.novis>        # compile to a native binary and run it\n");
     std::printf("  novis check <file.novis>        # type-check only\n");
     std::printf("  novis emit-ir <file.novis> [-o out.pir]\n");
+    std::printf("  novis emit-llvm <file.novis>     # dump textual LLVM IR (.ll) alongside source\n");
+    std::printf("  novis llvm <file.novis>          # full LLVM pipeline: C++ -> .ll -> native -> run\n");
+    std::printf("  novis wasm <file.novis>          # Wasm32 pipeline: C++ -> .wat -> wasm32 -> run in node\n");
     std::printf("  novis importpy <python-package>  # install native Novis provider facade\n");
     std::printf("  novis importpy --list            # list known Python native providers\n");
     std::printf("  novis env init                   # create isolated .novis environment\n");
@@ -324,6 +328,14 @@ int main(int argc, char** argv) {
     if (command == "--help" || command == "-h" || command == "help") {
         print_help();
         return 0;
+    }
+
+    if (command == "llvm" || command == "emit-llvm" || command == "wasm") {
+        if (argc < 3) { std::fprintf(stderr, "error: %s expects a file\n", command.c_str()); return 1; }
+        std::string in_path = argv[2];
+        if (command == "emit-llvm") return LLVMDriver{}.emit_llvm(in_path);
+        if (command == "llvm")     return LLVMDriver{}.run(in_path);
+        if (command == "wasm")     return WasmDriver{}.run(in_path);
     }
 
     if (command == "env") {

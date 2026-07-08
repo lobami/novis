@@ -538,7 +538,26 @@ public:
         close(fd);
         std::string bin_path = bin_tmpl;
 
-        std::string cmd = "clang++ -std=c++17 -O2 -Isrc -o " + bin_path + " " + src_path + " 2>&1";
+        // Honor NOVIS_LINK env var: comma-separated list of opt-in bindings.
+        // Supported tokens: arrow, blas. We append -I/-L/-l flags to clang.
+        std::string link_env;
+        if (const char* e = std::getenv("NOVIS_LINK")) link_env = e;
+        std::string link_flags;
+        bool want_arrow = link_env.find("arrow") != std::string::npos;
+        bool want_blas  = link_env.find("blas")  != std::string::npos;
+        if (want_arrow) {
+            link_flags += " -I/opt/homebrew/opt/apache-arrow/include "
+                          "-L/opt/homebrew/opt/apache-arrow/lib "
+                          "-larrow ";
+        }
+        if (want_blas) {
+            link_flags += " -I/opt/homebrew/opt/openblas/include "
+                          "-L/opt/homebrew/opt/openblas/lib "
+                          "-lopenblas ";
+        }
+
+        std::string cmd = "clang++ -std=c++17 -O2 -Isrc -o " + bin_path
+                        + " " + src_path + link_flags + " 2>&1";
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) throw std::runtime_error("popen failed");
         std::string compiler_output;

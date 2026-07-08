@@ -1,0 +1,16 @@
+fn busy(n: int) -> int:
+    s: int = 0
+    i: int = 0
+    while i < n:
+        s = s + i
+        i = i + 1
+    return s
+
+a: int = await(spawn(busy, 1000000))
+b: int = await(spawn(busy, 1000000))
+c: int = await(spawn(busy, 1000000))
+d: int = await(spawn(busy, 1000000))
+print(a)
+print(b)
+print(c)
+print(d)

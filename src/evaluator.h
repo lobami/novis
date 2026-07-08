@@ -18,6 +18,9 @@
 
 #include "ast.h"
 
+#include <future>
+#include <thread>
+
 // =============================================================================
 // Novis Tree-walking Evaluator
 // =============================================================================
@@ -67,7 +70,32 @@ struct UserFunction {
     std::shared_ptr<Environment> closure;
 };
 
-using Value = std::variant<int64_t, double, std::string, bool, Decimal, Money, Tensor, std::shared_ptr<UserFunction>>;
+// InterpreterTask is the value a `spawn` expression produces. It's a
+// type-erased handle: the underlying state is a std::shared_ptr<void>
+// and the awaiter is a std::function that knows how to pull a Value out
+// of that handle. Defined below after `Value` exists.
+class InterpreterTask;
+
+using Value = std::variant<int64_t, double, std::string, bool, Decimal, Money, Tensor, std::shared_ptr<UserFunction>, std::shared_ptr<InterpreterTask>>;
+
+// The full InterpreterTask definition. Kept out of the variant's body so the
+// variant can hold shared_ptr<InterpreterTask> (forward-declarable) without
+// dragging <functional>/<memory> at the variant's point of definition.
+class InterpreterTask {
+public:
+    using Holder = std::shared_ptr<void>;
+    using Awaiter = std::function<Value(Holder)>;
+
+    InterpreterTask(Holder state, Awaiter awaiter)
+        : state_(std::move(state)), awaiter_(std::move(awaiter)) {}
+
+    Value await() { return awaiter_(state_); }
+    bool is_ready() const { return state_ != nullptr; }
+
+private:
+    Holder state_;
+    Awaiter awaiter_;
+};
 
 // Native backend helpers (used by generated C++ in src/native.h). These are
 // safe to call from compiled Novis code: they only depend on the Value/Decimal/
@@ -189,6 +217,8 @@ public:
         define_builtin("pow");
         define_builtin("read_text");
         define_builtin("write_text");
+        // Async runtime builtin: spawn(expr) -> Task<T>, resolved by call_spawn.
+        globals_->define("__spawn", Value{std::string("__builtin___spawn__")});
     }
 
     // Entry point for a full program. Returns the value of the last
@@ -235,7 +265,7 @@ private:
     Value last_expr_value_{static_cast<int64_t>(0)};
 
     void define_builtin(const std::string& name) {
-        globals_->define(name, std::string("__builtin_" + name + "__"));
+        globals_->define(name, Value{std::string("__builtin_" + name + "__")});
     }
 
     // ----------------------------------------------------------------- SCOPES
@@ -379,6 +409,7 @@ private:
                     if (*sv == "__builtin_pow__")           { last_expr_value_ = call_pow(e.args); return; }
                     if (*sv == "__builtin_read_text__")     { last_expr_value_ = call_read_text(e.args); return; }
                     if (*sv == "__builtin_write_text__")    { last_expr_value_ = call_write_text(e.args); return; }
+                    if (*sv == "__builtin___spawn__")        { last_expr_value_ = call_spawn(e.args); return; }
                 }
                 if (auto fn = std::get_if<std::shared_ptr<UserFunction>>(&callee)) {
                     last_expr_value_ = call_user_function(*fn, e.args);
@@ -387,6 +418,23 @@ private:
             }
         }
         throw std::runtime_error("Call to non-function or undefined function");
+    }
+
+    void visitSpawnExpr(SpawnExpr& e) override {
+        // visitSpawnExpr is invoked when the user wrote `spawn(...)` directly.
+        // The lowerer has rewritten the call to `__spawn(<args>)`; we just
+        // dispatch to the regular call path which will route to call_spawn.
+        last_expr_value_ = evaluate(e.callee.get());
+    }
+
+    void visitAwaitExpr(AwaitExpr& e) override {
+        Value v = evaluate(e.task.get());
+        if (!std::holds_alternative<std::shared_ptr<InterpreterTask>>(v)) {
+            throw std::runtime_error("await() requires a Task (use spawn)");
+        }
+        auto task = std::get<std::shared_ptr<InterpreterTask>>(v);
+        if (!task) throw std::runtime_error("await() on null Task");
+        last_expr_value_ = task->await();
     }
 
     void visitAssignExpr(AssignExpr& e) override {
@@ -521,6 +569,92 @@ private:
         }
     }
 
+    // ============================================================== ASYNC RUNTIME
+    //
+    // call_spawn takes a user-defined function with a (currently fixed) set of
+    // args, runs its body on a worker thread, and returns an InterpreterTask
+    // that callers can `await`. We deliberately reuse the in-process
+    // Evaluator inside a fresh thread-local instance so we don't have to
+    // share `current_` across threads. The shared global environment
+    // (built-ins, stdlib) is read-only after construction.
+    Value call_spawn(const std::vector<std::unique_ptr<Expr>>& args) {
+        if (args.empty()) {
+            throw std::runtime_error("spawn() expects at least 1 function argument");
+        }
+        // First arg: the function reference (must be a UserFunction value).
+        Value fn_val = evaluate(args[0].get());
+        auto fn_ptr = std::get_if<std::shared_ptr<UserFunction>>(&fn_val);
+        if (!fn_ptr || !*fn_ptr) {
+            throw std::runtime_error("spawn() argument must be a named function");
+        }
+        std::shared_ptr<UserFunction> fn = *fn_ptr;
+        std::size_t argc = fn->decl->params.size();
+
+        // Evaluate any extra arguments in the parent thread — they become
+        // bound names in the worker's Environment, so the worker just runs
+        // the function body with those values pre-supplied. This avoids
+        // touching the parent Evaluator's state from the worker thread.
+        std::vector<Value> extra;
+        for (std::size_t i = 1; i < args.size(); ++i) {
+            extra.push_back(evaluate(args[i].get()));
+        }
+        if (extra.size() != argc) {
+            throw std::runtime_error(
+                "spawn() argument count mismatch: function " + fn->decl->name +
+                " expects " + std::to_string(argc) + " args, got " +
+                std::to_string(extra.size()));
+        }
+
+        std::vector<std::string> arg_names;
+        for (const auto& p : fn->decl->params) arg_names.push_back(p.name);
+        std::shared_ptr<Environment> closure = fn->closure;
+        Stmt* body = fn->decl->body.get();
+        std::shared_ptr<Environment> globals = globals_;
+
+        auto promise = std::make_shared<std::promise<Value>>();
+        std::future<Value> fut = promise->get_future();
+
+        std::thread worker([promise, body, globals, closure,
+                            arg_names, extra = std::move(extra)]() {
+            try {
+                Evaluator e;
+                e.globals_ = globals;
+                e.current_ = std::make_shared<Environment>(closure);
+                for (std::size_t i = 0; i < arg_names.size(); ++i) {
+                    e.current_->define(arg_names[i], extra[i]);
+                }
+                e.execute_value(body);
+                promise->set_value(Value{static_cast<int64_t>(0)});
+            } catch (const ReturnSignal& ret) {
+                promise->set_value(ret.value);
+            } catch (const std::exception& ex) {
+                promise->set_value(
+                    Value{std::string("async task failed: ") + ex.what()});
+            } catch (...) {
+                promise->set_value(
+                    Value{std::string("async task failed: unknown")});
+            }
+        });
+        worker.detach();
+
+        // Return an InterpreterTask that blocks on the future and yields the
+        // value. Errors come back as strings; the awaiter surfaces them.
+        auto state = std::make_shared<std::future<Value>>(std::move(fut));
+        InterpreterTask::Awaiter awaiter =
+            [](InterpreterTask::Holder h) -> Value {
+            auto fptr = std::static_pointer_cast<std::future<Value>>(h);
+            Value v = fptr->get();
+            if (std::holds_alternative<std::string>(v)) {
+                const std::string& s = std::get<std::string>(v);
+                if (s.rfind("async task failed:", 0) == 0) {
+                    throw std::runtime_error(s);
+                }
+            }
+            return v;
+        };
+        auto task = std::make_shared<InterpreterTask>(state, std::move(awaiter));
+        return Value{task};
+    }
     Value call_len(const std::vector<std::unique_ptr<Expr>>& args) {
         if (args.size() != 1) throw std::runtime_error("len() expects exactly 1 argument");
         Value v = evaluate(args[0].get());

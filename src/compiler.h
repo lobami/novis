@@ -212,6 +212,17 @@ private:
         emit("store " + last_value_ + ", @" + e.name);
     }
 
+    void visitSpawnExpr(SpawnExpr& e) override {
+        // Emit: spawn = __spawn(<args>) for the IR consumer
+        e.callee->accept(*this);
+        emit("spawn " + last_value_);
+    }
+
+    void visitAwaitExpr(AwaitExpr& e) override {
+        e.task->accept(*this);
+        emit("await " + last_value_);
+    }
+
     // ----------------------------------------------------------------- STMT
     void visitVarDeclStmt(VarDeclStmt& s) override {
         emit("decl @" + s.name + " : " + type_name(s.type.get()));

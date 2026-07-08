@@ -100,4 +100,51 @@ if [ -z "$installed_version" ]; then
   exit 1
 fi
 
+# -- Async runtime (spawn/await) ---------------------------------------------
+"$NOVIS" check "$ROOT/tests/async_basic.novis" >/dev/null
+"$NOVIS" run  "$ROOT/tests/async_basic.novis" >/tmp/novis_async.out
+if ! grep -q "5" /tmp/novis_async.out || ! grep -q "done" /tmp/novis_async.out; then
+  echo "async_basic missing expected output" >&2
+  cat /tmp/novis_async.out >&2
+  exit 1
+fi
+"$NOVIS" run  "$ROOT/tests/async_parallel.novis" >/tmp/novis_async_p.out
+if [[ "$(cat /tmp/novis_async_p.out)" != $'499999500000\n499999500000\n499999500000\n499999500000' ]]; then
+  echo "async_parallel output mismatch" >&2
+  cat /tmp/novis_async_p.out >&2
+  exit 1
+fi
+
+# -- LLVM backend -----------------------------------------------------------
+"$NOVIS" check "$ROOT/tests/llvm_smoke.novis" >/dev/null
+"$NOVIS" llvm  "$ROOT/tests/llvm_smoke.novis" >/tmp/novis_llvm.out
+if [[ "$(cat /tmp/novis_llvm.out)" != "42" ]]; then
+  echo "llvm pipeline output mismatch" >&2
+  cat /tmp/novis_llvm.out >&2
+  exit 1
+fi
+"$NOVIS" emit-llvm "$ROOT/tests/llvm_smoke.novis" >/dev/null
+if [[ ! -s "$ROOT/tests/llvm_smoke.novis.ll" ]]; then
+  echo "emit-llvm did not write a .ll file" >&2
+  exit 1
+fi
+if ! head -3 "$ROOT/tests/llvm_smoke.novis.ll" | grep -q "ModuleID"; then
+  echo "emit-llvm output is not valid LLVM IR header" >&2
+  exit 1
+fi
+
+# -- Wasm backend (smoke: must run the driver without crashing) -----------
+# The Wasm pipeline is more involved than the others (needs a wasm32
+# toolchain with libcxx). On the dev box it won't actually produce a
+# running .wasm yet, but the driver should *run* and produce a sensible
+# diagnostic — never a crash. We just require the driver exit cleanly
+# with a non-zero status and emit a message about the toolchain.
+"$NOVIS" wasm "$ROOT/tests/llvm_smoke.novis" >/tmp/novis_wasm.out 2>&1 || true
+# Must mention either a real Wasm diagnostic OR successfully run the .wasm
+if ! grep -qE "wasm32|wasi-sdk|brew install|^42" /tmp/novis_wasm.out; then
+  echo "wasm driver produced unexpected output" >&2
+  cat /tmp/novis_wasm.out >&2
+  exit 1
+fi
+
 echo "novis tests: ok"

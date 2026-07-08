@@ -355,6 +355,33 @@ private:
             auto operand = parse_unary();
             return std::make_unique<UnaryExpr>(UnaryOp::Not, std::move(operand));
         }
+        if (check(TokenType::AWAIT_KW)) {
+            advance();
+            auto task = parse_unary();
+            return std::make_unique<AwaitExpr>(std::move(task));
+        }
+        return parse_spawn_or_call();
+    }
+
+    std::unique_ptr<Expr> parse_spawn_or_call() {
+        if (check(TokenType::SPAWN_KW)) {
+            advance();
+            expect(TokenType::LPAREN, "'('");
+            std::vector<std::unique_ptr<Expr>> args;
+            if (!check(TokenType::RPAREN)) {
+                args.push_back(parse_expression());
+                while (match(TokenType::COMMA)) {
+                    if (check(TokenType::RPAREN)) break;
+                    args.push_back(parse_expression());
+                }
+            }
+            expect(TokenType::RPAREN, "')'");
+            // spawn(fn) lowers to: __spawn(fn) — visitSpawnExpr will look up
+            // the UserFunction in the env and submit it to the worker pool.
+            auto callable = std::make_unique<CallExpr>(
+                std::make_unique<VariableExpr>("__spawn"), std::move(args));
+            return std::make_unique<SpawnExpr>(std::move(callable));
+        }
         return parse_call();
     }
 

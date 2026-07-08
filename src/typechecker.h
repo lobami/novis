@@ -312,7 +312,7 @@ private:
             "is_balanced", "tensor", "shape", "sum", "mean", "variance",
             "stddev", "min", "max", "dot", "relu", "sigmoid", "softmax",
             "argmax", "risk_score", "Tensor", "sqrt", "pow", "read_text",
-            "write_text"
+            "write_text", "__spawn"
         };
         return builtins.count(name) > 0;
     }
@@ -438,6 +438,11 @@ private:
             require_type(name, args[0], CheckedType::Kind::Str);
             require_type(name, args[1], CheckedType::Kind::Str);
             return CheckedType(CheckedType::Kind::Int);
+        }
+        if (name == "__spawn") {
+            // spawn(fn, arg1, arg2, ...) — at least 1 arg (the callable)
+            if (args.empty()) fail("__spawn() expects at least 1 argument");
+            return CheckedType(CheckedType::Kind::Custom, "Task");
         }
         fail("Unknown builtin '" + name + "'");
         return CheckedType::unknown();
@@ -607,6 +612,47 @@ private:
         CheckedType value = type_expr(e.value.get());
         assign_var(e.name, value);
         last_type_ = value;
+    }
+
+    void visitSpawnExpr(SpawnExpr& e) override {
+        // The inner expression has already been type-checked by the call to
+        // visitCallExpr when we walked e.callee. We expose it as a Task<...>
+        // carrying the same payload type as the inner callable's return.
+        // We don't model generic Task<T> yet, so the spawn expression simply
+        // has its payload type at this layer; the await then unwraps it.
+        CheckedType inner = type_expr(e.callee.get());
+        if (auto* c = dynamic_cast<CallExpr*>(e.callee.get())) {
+            if (!c->args.empty()) {
+                CheckedType arg_t = type_expr(c->args[0].get());
+                if (arg_t.kind == CheckedType::Kind::Custom && arg_t.name == "fn") {
+                    auto fn_it = functions_.find(/*name*/ "");
+                    // The synthetic name is "__spawn" so we look it up via the
+                    // call's callee. Simpler: drill to functions_ by name.
+                }
+            }
+        }
+        last_type_ = inner;
+        // Note: last_type_ ends up as `Task` (Custom "Task") from visitCallExpr
+        // for the __spawn call. visitAwaitExpr re-resolves the inner return.
+    }
+
+    void visitAwaitExpr(AwaitExpr& e) override {
+        // await(spawn(fn, ...)) — the result type is fn's return type.
+        last_type_ = type_expr(e.task.get());
+        if (auto* spawn = dynamic_cast<SpawnExpr*>(e.task.get())) {
+            if (auto* c = dynamic_cast<CallExpr*>(spawn->callee.get())) {
+                if (!c->args.empty() && c->args[0]) {
+                    // We need to look up the named function. The first arg is
+                    // a VariableExpr carrying the function name.
+                    if (auto* v = dynamic_cast<VariableExpr*>(c->args[0].get())) {
+                        auto fn_it = functions_.find(v->name);
+                        if (fn_it != functions_.end()) {
+                            last_type_ = fn_it->second.return_type;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     void visitVarDeclStmt(VarDeclStmt& s) override {

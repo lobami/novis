@@ -1,0 +1,16 @@
+fn slow_add(a: int, b: int) -> int:
+    s: int = 0
+    i: int = 0
+    while i < 100:
+        s = s + i
+        i = i + 1
+    return a + b
+
+t1: int = await(spawn(slow_add, 2, 3))
+t2: int = await(spawn(slow_add, 10, 20))
+t3: int = await(spawn(slow_add, 100, 200))
+
+print(t1)
+print(t2)
+print(t3)
+print("done")
