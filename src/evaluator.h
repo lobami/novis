@@ -69,6 +69,34 @@ struct UserFunction {
 
 using Value = std::variant<int64_t, double, std::string, bool, Decimal, Money, Tensor, std::shared_ptr<UserFunction>>;
 
+// Native backend helpers (used by generated C++ in src/native.h). These are
+// safe to call from compiled Novis code: they only depend on the Value/Decimal/
+// Money/Tensor types defined in this header.
+namespace nv_ctors {
+    inline Value make_int(int64_t v) { return Value{v}; }
+    inline Value make_double(double v) { return Value{v}; }
+    inline Value make_string(std::string s) { return Value{std::move(s)}; }
+    inline Value make_bool(bool b) { return Value{b}; }
+    inline Value make_decimal(Decimal d) { return Value{std::move(d)}; }
+    inline Value make_money(Money m) { return Value{std::move(m)}; }
+    inline Value make_tensor(Tensor t) { return Value{std::move(t)}; }
+    inline Value make_from(int64_t v) { return Value{v}; }
+    inline Value make_from(double v) { return Value{v}; }
+    inline Value make_from(std::string s) { return Value{std::move(s)}; }
+    inline Value make_from(bool b) { return Value{b}; }
+    inline Value make_from(Decimal d) { return Value{std::move(d)}; }
+    inline Value make_from(Money m) { return Value{std::move(m)}; }
+    inline Value make_from(Tensor t) { return Value{std::move(t)}; }
+    template <typename T>
+    inline Value make_from(T v) { return Value{std::move(v)}; }
+    inline Value make_fn(void* /*fnptr*/) { return Value{static_cast<int64_t>(0)}; }
+}
+
+namespace nv_ctors {
+    template <typename T> inline Value make(T v) { return make_from(std::move(v)); }
+}
+
+
 // -----------------------------------------------------------------------------
 // Environment: chained lexical scopes (parent pointer).
 // -----------------------------------------------------------------------------

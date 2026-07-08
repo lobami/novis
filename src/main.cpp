@@ -23,6 +23,7 @@
 #include "importpy.h"
 #include "lexer.h"
 #include "module_resolver.h"
+#include "native.h"
 #include "parser.h"
 #include "token.h"
 #include "typechecker.h"
@@ -298,7 +299,8 @@ void print_help() {
     std::printf("%s\n", NOVIS_CREATED_BY);
     std::printf("usage:\n");
     std::printf("  novis                         # REPL\n");
-    std::printf("  novis run <file.novis>          # type-check and execute\n");
+    std::printf("  novis run <file.novis>          # type-check and execute (interpreter)\n");
+    std::printf("  novis build <file.novis>        # compile to a native binary and run it\n");
     std::printf("  novis check <file.novis>        # type-check only\n");
     std::printf("  novis emit-ir <file.novis> [-o out.pir]\n");
     std::printf("  novis importpy <python-package>  # install native Novis provider facade\n");
@@ -367,6 +369,7 @@ int main(int argc, char** argv) {
     bool emit_ir = false;
     bool check_only = false;
     bool run = false;
+    bool build_native = false;
     std::string input_path;
     std::string output_path;
 
@@ -377,6 +380,11 @@ int main(int argc, char** argv) {
     } else if (command == "run") {
         run = true;
         if (argc < 3) { std::fprintf(stderr, "error: run expects a file\n"); return 1; }
+        input_path = argv[2];
+    } else if (command == "build") {
+        run = true;
+        build_native = true;
+        if (argc < 3) { std::fprintf(stderr, "error: build expects a file\n"); return 1; }
         input_path = argv[2];
     } else if (command == "emit-ir" || command == "--emit-ir" || command == "--compile") {
         emit_ir = true;
@@ -430,6 +438,19 @@ int main(int argc, char** argv) {
             std::cout << ir;
         }
         return 0;
+    }
+
+    if (build_native) {
+        try {
+            std::string bin = NativeDriver::build(source, input_path);
+            std::string cmd = bin;
+            int rc = std::system(cmd.c_str());
+            return rc == 0 ? 0 : 1;
+        } catch (const std::exception& ex) {
+            SourceFile file(input_path, source);
+            std::cerr << file.render_error(ex.what());
+            return 1;
+        }
     }
 
     if (run) {

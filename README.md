@@ -117,7 +117,7 @@ Created by Loth Mejía Martínez · México · 2026
 Bye.
 ```
 
-### 4. Run a script
+### 4. Run a script (interpreter)
 
 ```bash
 ./novis run examples/bank_risk.novis
@@ -128,6 +128,40 @@ Output:
 ```text
 true
 ```
+
+### 5. Build a native binary (real speed)
+
+The interpreter is portable, but if you want **actual native speed**, the Novis compiler can lower the AST to C++ and shell out to clang++ to produce a native binary. The native binary has zero Python dependency and runs at C++ speed.
+
+```bash
+novis build examples/bank_risk.novis
+```
+
+That command:
+
+1. Parses and type-checks `examples/bank_risk.novis`.
+2. Emits C++ from the AST (using the `src/native.h` codegen).
+3. Calls `clang++ -std=c++17 -O2` to compile that C++ into a native executable.
+4. Runs the executable.
+
+#### Benchmark: Novis native vs CPython 3.14 on Apple M1
+
+```text
+INTERPRETER (novis run = tree-walking, slow but portable)
+fib(30)                         novis= 24945ms  py=    76ms  ratio=328.22x
+sum_squares(1000000)            novis=   125ms  py=    21ms  ratio=5.95x
+
+NATIVE BUILD (novis build = C++ codegen, fast)
+fib(30)                          native=  38ms  py=    72ms  ratio=0.53x
+```
+
+The native binary is roughly **2x faster than CPython** on `fib(30)`. Run it yourself:
+
+```bash
+ITERS=3 N_FIB=30 N_SUM=200000 benchmarks/run_bench.sh
+```
+
+The interpreter is intentionally kept as a fallback for code that hasn't been migrated to the native backend yet. It also remains useful for fast REPL feedback while iterating.
 
 ---
 

@@ -69,6 +69,47 @@ bench() {
     printf 'novis=%6dms  py=%6dms  ratio=%sx\n' "$best_novis_ms" "$best_py_ms" "$ratio"
 }
 
+# bench_native: measure the pure execution of the already-built native binary.
+# The native build is amortized over many invocations, so what matters is the
+# runtime of the produced binary, not the clang++ invocation.
+bench_native_exec() {
+    local name="$1"
+    local novis_src="$2"
+    local py_src="$3"
+
+    # Build a fresh native binary for this benchmark.
+    "$NOVIS" build "$novis_src" >/dev/null 2>&1 || true
+    local latest_bin
+    latest_bin="$(ls -1t /tmp/novis_bin_* 2>/dev/null | head -n 1 || true)"
+    if [ -z "$latest_bin" ] || [ ! -x "$latest_bin" ]; then
+        printf '%-32s no native binary produced\n' "$name"
+        return
+    fi
+    "$latest_bin" >/dev/null
+    "$PYTHON" "$py_src" >/dev/null
+
+    local best_novis_ms=99999999
+    local best_py_ms=99999999
+    for _ in $(seq 1 "$ITERS"); do
+        local t0 t1 ms
+        t0="$(date +%s%N)"
+        "$latest_bin" >/dev/null
+        t1="$(date +%s%N)"
+        ms=$(( (t1 - t0) / 1000000 ))
+        if [ "$ms" -lt "$best_novis_ms" ]; then best_novis_ms="$ms"; fi
+
+        t0="$(date +%s%N)"
+        "$PYTHON" "$py_src" >/dev/null
+        t1="$(date +%s%N)"
+        ms=$(( (t1 - t0) / 1000000 ))
+        if [ "$ms" -lt "$best_py_ms" ]; then best_py_ms="$ms"; fi
+    done
+
+    local ratio
+    ratio=$(python3 -c "print(f'{$best_novis_ms / $best_py_ms:.2f}')")
+    printf '%-32s native=%4dms  py=%6dms  ratio=%sx\n' "$name" "$best_novis_ms" "$best_py_ms" "$ratio"
+}
+
 hr
 echo "Novis vs Python — best of $ITERS runs, lower is better"
 echo "  novis  : $($NOVIS --help | head -n 1)"
@@ -132,10 +173,17 @@ trap 'rm -f "$FIB_NOVIS_SRC" "$FIB_PY_SRC" \
 bench "fib(${N_FIB})"            "$FIB_NOVIS_SRC"               "$FIB_PY_SRC"
 bench "sum_squares(${N_SUM})"     "$ROOT/benchmarks/.sum_squares_${N_SUM}.novis" \
                                   "$ROOT/benchmarks/.sum_squares_${N_SUM}.py"
+bench_native_exec "fib(${N_FIB})"         "$FIB_NOVIS_SRC"        "$FIB_PY_SRC"
+bench_native_exec "sum_squares(${N_SUM})"  "$ROOT/benchmarks/.sum_squares_${N_SUM}.novis" \
+                                       "$ROOT/benchmarks/.sum_squares_${N_SUM}.py"
 
 hr
-echo "ratio > 1.0 means Novis is faster than CPython on that benchmark."
-echo "ratio < 1.0 means Novis is slower (expected for the tree-walking interpreter)."
+echo "INTERPRETER: novis run = tree-walking, expected to be much slower than native."
+echo "NATIVE:      novis build emits C++ and runs it through clang++; the binary"
+echo "             itself is native C++ (not LLVM-grade yet, but C++-tier)."
+echo
+echo "ratio > 1.0 means Novis is slower than CPython on that benchmark."
+echo "ratio < 1.0 means Novis is faster."
 echo
 echo "Reproduce with:"
 echo "  ITERS=5 N_FIB=30 N_SUM=1000000 $0"
