@@ -1,0 +1,3 @@
+# Novis importpy native provider lockfile
+pandas -> pandas | provider=novis.data.arrow | backend=Apache Arrow native memory + Novis kernels | python_required=false
+numpy -> numpy | provider=novis.tensor.native | backend=Accelerate/OpenBLAS/oneDNN/Wasm SIMD | python_required=false

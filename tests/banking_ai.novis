@@ -1,0 +1,13 @@
+import std.bank
+import std.ai
+import std.math
+
+capital: money = money("1000.00", "MXN")
+fee: money = money("12.345", "MXN")
+total: money = round_bankers(capital + fee, 2)
+features: Tensor<f32> = [1, 2, 3]
+weights: Tensor<f32> = [0.1, 0.2, 0.3]
+score: f32 = classify(features, weights)
+print(total)
+print(clamp(score, 0, 1))
+print(balanced(total, debit(total)))

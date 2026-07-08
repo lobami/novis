@@ -1,0 +1,19 @@
+import std.bank
+import std.ai
+import std.math
+
+pub type CreditApplication:
+    pub id: str
+    requested: money
+    features: Tensor<f32>
+
+pub fn approve(requested: money, features: Tensor<f32>) -> bool:
+    score: f32 = risk_score(features)
+    adjusted: f32 = clamp(score, 0, 1)
+    if requested > money("5000.00", "MXN"):
+        return adjusted < 0.35
+    return adjusted < 0.60
+
+application_amount: money = money("3500.00", "MXN")
+features: Tensor<f32> = [10000, 2500, 1]
+print(approve(application_amount, features))

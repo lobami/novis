@@ -1,0 +1,5 @@
+import std.fs
+import std.string
+
+text: str = "Novis"
+print(length(text))

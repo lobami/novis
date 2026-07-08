@@ -1,0 +1,16 @@
+import std.core
+
+pub type Account:
+    pub id: str
+    balance: money
+    tags: List<str>
+
+pub interface Repository<T>:
+    fn find(id: str) -> Option<T>
+    fn save(item: T) -> Result<T, Error>
+
+pub fn identity_account<T>(item: T) -> T:
+    return item
+
+value: money = money("25.00", "USD")
+print(identity_account(value))

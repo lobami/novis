@@ -1,0 +1,6 @@
+import pandas
+import numpy
+
+xs: Tensor<f32> = [1, 2, 3, 4]
+ys: Tensor<f32> = [0.1, 0.2, 0.3, 0.4]
+print(pd_mean(xs), pd_count(xs), np_dot(xs, ys))
