@@ -1,0 +1,9 @@
+# Novis benchmark: sum of squares of the first N integers.
+# Uses the language's built-in tensors + reductions.
+n: int = 1000000
+xs: Tensor<f32> = []
+i: int = 0
+while i < n:
+    xs = xs + [i + 1]
+    i = i + 1
+print(sum(xs))

@@ -15,3 +15,9 @@ novis
 # Novis project environment
 .novis/build/
 .novis/cache/
+
+# Benchmark scratch (rebuilt by run_bench.sh)
+benchmarks/.fib_*.novis
+benchmarks/.fib_*.py
+benchmarks/.sum_squares_*.novis
+benchmarks/.sum_squares_*.py

@@ -1,0 +1,9 @@
+# Novis benchmark: fibonacci
+# Recursive, naive (no memoization) — keeps the workload identical to Python.
+fn fib(n: int) -> int:
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+result: int = fib(30)
+print(result)
