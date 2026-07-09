@@ -302,14 +302,19 @@ inline std::string zynta_json_stringify(const ::Value& v) {
 // src/zynta_runtime.cpp because we need real external symbols the
 // linker can find — `inline` + `extern "C"` doesn't reliably emit
 // strong symbols on macOS/clang.
-extern "C" {
-int zynta_app_new_impl();
-int zynta_route_impl(int app, const std::string& method,
-                     const std::string& path, const std::string& fn);
-int zynta_run_impl(int app, const std::string& host, int port);
-void* zynta_json_parse_impl(const std::string& s);
-std::string zynta_json_stringify_impl(const void* v);
-}
+// Forward declarations for the C-linkage shims. The actual definitions
+// live in two places:
+//   * zynta_app_new_impl, zynta_route_impl, zynta_run_impl,
+//     zynta_json_parse_impl, zynta_json_stringify_impl — in
+//     src/zynta_runtime.cpp (part of the novis binary).
+//   * zynta_db_connect_impl, zynta_db_query_impl,
+//     zynta_db_exec_impl, zynta_db_close_impl — in
+//     ../zynta/src/zynta_db.cpp (linked by the Makefile when
+//     NOVIS_HAS_ZYNTA is set).
+//
+// The forward declarations for these shims live in src/evaluator.h
+// (guarded by NOVIS_HAS_ZYNTA) because the call_zynta_db_* methods need
+// them in scope. We don't redeclare them here to avoid ODR violations.
 
 // Register all zynta builtins into the novis global environment. Called
 // once at startup from the `novis zynta-serve` driver path.
@@ -327,6 +332,8 @@ inline void register_zynta_builtins(::Evaluator& eval) {
     g->define("zynta_json_parse",::Value{std::string("__builtin___zynta_json_parse__")});
     g->define("zynta_json_stringify",
               ::Value{std::string("__builtin___zynta_json_stringify__")});
+    g->define("zynta_db_query",  ::Value{std::string("__builtin___zynta_db_query__")});
+    g->define("zynta_db_exec",   ::Value{std::string("__builtin___zynta_db_exec__")});
 }
 
 } // namespace zynta_runtime

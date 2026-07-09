@@ -244,7 +244,8 @@ private:
     bool is_known_custom_type(const std::string& name) const {
         return user_types_.count(name) || interfaces_.count(name) ||
                is_builtin_generic_family(name) || name == "Error" ||
-               name == "dict" || name == "Dict";
+               name == "dict" || name == "Dict" ||
+               name == "list" || name == "List";
     }
 
     static bool is_builtin_generic_family(const std::string& name) {
@@ -320,7 +321,8 @@ private:
             "argmax", "risk_score", "Tensor", "sqrt", "pow", "read_text",
             "write_text", "__spawn", "dict", "Dict",
             "zynta_app_new", "zynta_route", "zynta_run",
-            "zynta_json_parse", "zynta_json_stringify"
+            "zynta_json_parse", "zynta_json_stringify",
+            "zynta_db_query", "zynta_db_exec"
         };
         return builtins.count(name) > 0;
     }
@@ -471,6 +473,18 @@ private:
         if (name == "zynta_json_stringify") {
             require_arity(name, args, 1);
             return CheckedType(CheckedType::Kind::Str);
+        }
+        if (name == "zynta_db_query") {
+            require_arity(name, args, 1);
+            // Returns an array of dicts (one per row). We use the
+            // Custom type "list" which the user can name with a
+            // bareword annotation; the variable can be re-declared
+            // as `dict` if the user prefers.
+            return CheckedType(CheckedType::Kind::Custom, "list");
+        }
+        if (name == "zynta_db_exec") {
+            require_arity(name, args, 1);
+            return CheckedType(CheckedType::Kind::Int);
         }
         fail("Unknown builtin '" + name + "'");
         return CheckedType::unknown();

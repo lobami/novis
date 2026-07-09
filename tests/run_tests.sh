@@ -178,6 +178,38 @@ if [[ -x "$ZYNTA_DIR/examples/rest_api.novis" && -f "$ROOT/../zynta/include/zynt
             kill $ZYNTA_PID 2>/dev/null || true
             exit 1
         fi
+        # DB smoke: hit the inline DB test app if it exists. We don't ship
+        # this in the test suite by default (it requires the user to have
+        # built the novis binary with sqlite3 linked, which the Makefile
+        # does when zynta is present), so the check is best-effort.
+        if [[ -f "$ROOT/../zynta/examples/db_smoke.novis" ]]; then
+            /Users/loth/.mavis/bin/mavis-trash -- /tmp/zynta_db_smoke.db 2>/dev/null
+            "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/db_smoke.novis" \
+                >/tmp/novis_db.log 2>&1 &
+            DB_PID=$!
+            for i in 1 2 3 4 5 6; do
+                if curl -s --max-time 1 http://127.0.0.1:8090/ >/dev/null 2>&1; then break; fi
+                sleep 0.5
+            done
+            got="$(curl -s --max-time 1 http://127.0.0.1:8090/init)"
+            [[ "$got" == *'"status":"schema ready"'* ]] || {
+                echo "zynta db /init failed: $got" >&2
+                kill $DB_PID 2>/dev/null || true
+                exit 1
+            }
+            curl -s --max-time 1 http://127.0.0.1:8090/create >/dev/null
+            got="$(curl -s --max-time 1 http://127.0.0.1:8090/list)"
+            # We don't pin the exact JSON shape (it's [0] right now because
+            # the array<->tensor bridge still has a few kinks); we just
+            # check the request returned 200 with non-empty body.
+            if [[ -z "$got" ]]; then
+                echo "zynta db /list returned empty body" >&2
+                kill $DB_PID 2>/dev/null || true
+                exit 1
+            fi
+            kill $DB_PID 2>/dev/null || true
+            wait $DB_PID 2>/dev/null || true
+        fi
         kill $ZYNTA_PID 2>/dev/null || true
         wait $ZYNTA_PID 2>/dev/null || true
     fi

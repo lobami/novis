@@ -26,4 +26,22 @@ std::string zynta_json_stringify_impl(const void* v) {
     const ::Value* vp = static_cast<const ::Value*>(v);
     return zynta_runtime::zynta_json_stringify(*vp);
 }
+}  // extern "C"
+
+// Helper used by Evaluator::call_zynta_db_query (in src/evaluator.h).
+// The C-side shim zynta_db_query_impl heap-allocates a
+// zynta::ValuePtr (a std::shared_ptr<zynta::Value>) and returns it as
+// a void*. We downcast, convert to a novis::Value via from_zynta, and
+// free the heap pointer.
+//
+// We put this here (not in evaluator.h) because the body needs to
+// see both ::Value and zynta::ValuePtr at a point where the include
+// order makes one of them invisible. Defining it in a .cpp file
+// after both headers are processed sidesteps the include-order
+// gymnastics.
+Value zynta_value_from_packed(void* packed) {
+    auto* sp = static_cast<std::shared_ptr<zynta::Value>*>(packed);
+    zynta::ValuePtr zv = *sp;
+    delete sp;
+    return zynta_runtime::from_zynta(zv);
 }
