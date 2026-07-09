@@ -133,6 +133,16 @@ if ! head -3 "$ROOT/tests/llvm_smoke.novis.ll" | grep -q "ModuleID"; then
   exit 1
 fi
 
+# -- Structs + Dict literals (Phase-1 of zynta web framework) -------------
+"$NOVIS" check "$ROOT/tests/struct_dict.novis" >/dev/null
+"$NOVIS" run   "$ROOT/tests/struct_dict.novis" >/tmp/novis_struct_dict.out
+expected_struct_dict=$'{active: true, age: 30, name: alice}\n{active: true, age: 25, name: bob}\n{}'
+if [[ "$(cat /tmp/novis_struct_dict.out)" != "$expected_struct_dict" ]]; then
+  echo "struct_dict output mismatch" >&2
+  cat /tmp/novis_struct_dict.out >&2
+  exit 1
+fi
+
 # -- Wasm backend (smoke: must run the driver without crashing) -----------
 # The Wasm pipeline is more involved than the others (needs a wasm32
 # toolchain with libcxx). On the dev box it won't actually produce a

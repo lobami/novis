@@ -50,6 +50,7 @@ enum class TokenType {
     OR_KW,
     NOT_KW,
     TYPE_KW,
+    STRUCT_KW,
     INTERFACE_KW,
     PUB_KW,
     IMPL_KW,

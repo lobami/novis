@@ -212,6 +212,27 @@ private:
         emit("store " + last_value_ + ", @" + e.name);
     }
 
+    void visitDictLiteral(DictLiteral& e) override {
+        // Emit a `dict_new` op followed by `dict_set` for each entry. The
+        // runtime lowers dict_new to a fresh DictPtr; the IR keeps the
+        // logical structure so consumers can read individual entries.
+        emit("dict_new");
+        for (const auto& entry : e.entries) {
+            entry.key->accept(*this);
+            entry.value->accept(*this);
+            emit("dict_set " + last_value_);
+        }
+    }
+
+    void visitStructDeclStmt(StructDeclStmt& s) override {
+        // Struct decls compile to a marker so the runtime can build a
+        // Pydantic-style validator. Field types are recorded for later use.
+        emit("struct_decl " + s.name);
+        for (const auto& f : s.fields) {
+            emit("  field " + f.name + " : " + type_name(f.type.get()));
+        }
+    }
+
     void visitSpawnExpr(SpawnExpr& e) override {
         // Emit: spawn = __spawn(<args>) for the IR consumer
         e.callee->accept(*this);

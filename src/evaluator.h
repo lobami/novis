@@ -63,6 +63,22 @@ inline bool operator==(const Tensor& a, const Tensor& b) {
     return a.shape == b.shape && a.data == b.data;
 }
 
+// Dict is a Pydantic-style map used for JSON, struct instances, and zynta's
+// request/response bodies. We hold `std::shared_ptr<void>` for the value
+// type instead of `std::shared_ptr<Value>` because the Value variant (a few
+// lines below) contains std::shared_ptr<Dict> — making Dict's value type
+// `shared_ptr<Value>` would force the variant to recursively name itself
+// through Dict, which std::variant cannot do.
+//
+// Type-erased writes always come from a real `std::shared_ptr<Value>`; the
+// runtime downcasts back to `shared_ptr<Value>` whenever it reads an entry.
+// The cast is safe because the runtime never inserts anything else.
+struct Dict {
+    std::map<std::string, std::shared_ptr<void>> entries;
+    bool operator==(const Dict& o) const { return entries == o.entries; }
+};
+using DictPtr = std::shared_ptr<Dict>;
+
 class Environment;
 
 struct UserFunction {
@@ -76,7 +92,7 @@ struct UserFunction {
 // of that handle. Defined below after `Value` exists.
 class InterpreterTask;
 
-using Value = std::variant<int64_t, double, std::string, bool, Decimal, Money, Tensor, std::shared_ptr<UserFunction>, std::shared_ptr<InterpreterTask>>;
+using Value = std::variant<int64_t, double, std::string, bool, Decimal, Money, Tensor, DictPtr, std::shared_ptr<UserFunction>, std::shared_ptr<InterpreterTask>>;
 
 // The full InterpreterTask definition. Kept out of the variant's body so the
 // variant can hold shared_ptr<InterpreterTask> (forward-declarable) without
@@ -262,6 +278,7 @@ public:
 private:
     std::shared_ptr<Environment> globals_;
     std::shared_ptr<Environment> current_;
+    std::map<std::string, std::vector<std::string>> struct_fields_;
     Value last_expr_value_{static_cast<int64_t>(0)};
 
     void define_builtin(const std::string& name) {
@@ -427,6 +444,22 @@ private:
         last_expr_value_ = evaluate(e.callee.get());
     }
 
+    void visitDictLiteral(DictLiteral& e) override {
+        // Build a new Dict from the parsed entries. Each value is evaluated
+        // and stored as a type-erased shared_ptr<void> that actually holds
+        // a shared_ptr<Value>. The variant can carry DictPtr, so the Dict
+        // is a first-class value users can pass around and return.
+        auto d = std::make_shared<Dict>();
+        for (const auto& entry : e.entries) {
+            auto* sk = dynamic_cast<StringLiteral*>(entry.key.get());
+            if (!sk) throw std::runtime_error("dict key must be a string literal");
+            Value vv = evaluate(entry.value.get());
+            auto vp = std::make_shared<Value>(std::move(vv));
+            d->entries[sk->value] = std::static_pointer_cast<void>(vp);
+        }
+        last_expr_value_ = Value{d};
+    }
+
     void visitAwaitExpr(AwaitExpr& e) override {
         Value v = evaluate(e.task.get());
         if (!std::holds_alternative<std::shared_ptr<InterpreterTask>>(v)) {
@@ -511,6 +544,21 @@ private:
     void visitTypeDeclStmt(TypeDeclStmt& s) override {
         // Runtime no-op: type declarations are consumed by TypeChecker/IR.
         current_->define(s.name, std::string("__type__" + s.name));
+        last_expr_value_ = static_cast<int64_t>(0);
+    }
+
+    void visitStructDeclStmt(StructDeclStmt& s) override {
+        // `struct X: ...` is a Pydantic-style data record. We register the
+        // struct name in the environment so the user can refer to it later
+        // (e.g. for struct validators or zynta's request models). We also
+        // stash the field list in globals_ so framework code can read it.
+        current_->define(s.name, std::string("__struct__" + s.name));
+        // For each field, record its name+type in a side table we keep on
+        // globals_. The simplest place is a map on the Evaluator instance.
+        struct_fields_[s.name] = std::vector<std::string>();
+        for (const auto& f : s.fields) {
+            struct_fields_[s.name].push_back(f.name);
+        }
         last_expr_value_ = static_cast<int64_t>(0);
     }
 
@@ -1347,6 +1395,22 @@ private:
             return m.currency + " " + decimal_to_string(m.amount, 2);
         }
         if (std::holds_alternative<Tensor>(v))      return tensor_to_string(std::get<Tensor>(v));
+        if (std::holds_alternative<DictPtr>(v)) {
+            const auto& dp = std::get<DictPtr>(v);
+            if (!dp) return "{}";
+            std::string s = "{";
+            bool first = true;
+            for (const auto& [k, vptr] : dp->entries) {
+                if (!first) s += ", ";
+                first = false;
+                s += k + ": ";
+                // Downcast the type-erased void* back to Value.
+                auto vp = std::static_pointer_cast<Value>(vptr);
+                s += value_to_string(*vp);
+            }
+            s += "}";
+            return s;
+        }
         if (std::holds_alternative<std::shared_ptr<UserFunction>>(v)) return "<function>";
         return std::get<std::string>(v);
     }

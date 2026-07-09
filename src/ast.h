@@ -25,6 +25,7 @@ public:
     virtual void visitStringLiteral(struct StringLiteral&) = 0;
     virtual void visitBoolLiteral(struct BoolLiteral&) = 0;
     virtual void visitTensorLiteral(struct TensorLiteral&) = 0;
+    virtual void visitDictLiteral(struct DictLiteral&) = 0;
     virtual void visitVariableExpr(struct VariableExpr&) = 0;
     virtual void visitBinaryExpr(struct BinaryExpr&) = 0;
     virtual void visitUnaryExpr(struct UnaryExpr&) = 0;
@@ -46,6 +47,7 @@ public:
     virtual void visitFunctionDeclStmt(struct FunctionDeclStmt&) = 0;
     virtual void visitTypeDeclStmt(struct TypeDeclStmt&) = 0;
     virtual void visitInterfaceDeclStmt(struct InterfaceDeclStmt&) = 0;
+    virtual void visitStructDeclStmt(struct StructDeclStmt&) = 0;
 };
 
 // =============================================================================
@@ -134,6 +136,21 @@ struct TensorLiteral : Expr {
     explicit TensorLiteral(std::vector<std::unique_ptr<Expr>> elems)
         : elements(std::move(elems)) {}
     void accept(ExprVisitor& v) override { v.visitTensorLiteral(*this); }
+};
+
+struct DictLiteralEntry {
+    std::unique_ptr<Expr> key;     // StringLiteral typically, but any Expr
+    std::unique_ptr<Expr> value;
+    DictLiteralEntry(std::unique_ptr<Expr> k, std::unique_ptr<Expr> v)
+        : key(std::move(k)), value(std::move(v)) {}
+};
+
+// { "k1": v1, "k2": v2, ... } — a Pydantic-style dict literal
+struct DictLiteral : Expr {
+    std::vector<DictLiteralEntry> entries;
+    explicit DictLiteral(std::vector<DictLiteralEntry> e)
+        : entries(std::move(e)) {}
+    void accept(ExprVisitor& v) override { v.visitDictLiteral(*this); }
 };
 
 struct VariableExpr : Expr {
@@ -284,6 +301,26 @@ struct TypeDeclStmt : Stmt {
         : is_public(pub), name(std::move(n)), type_params(std::move(generics)),
           fields(std::move(f)) {}
     void accept(StmtVisitor& v) override { v.visitTypeDeclStmt(*this); }
+};
+
+// `struct X: ...` is a Pydantic-style data record: typed fields, no methods,
+// and instances are dict-like values validated against the field list at
+// construction time. The TypeDeclStmt visitor handles it the same way at the
+// declaration site; StructDeclStmt exists so a framework like `zynta` can
+// distinguish "this is a Pydantic model" from "this is a regular nominal
+// type with methods" at the typecheck level.
+struct StructDeclStmt : Stmt {
+    bool is_public = false;
+    std::string name;
+    std::vector<std::string> type_params;
+    std::vector<FieldDecl> fields;
+    StructDeclStmt(bool pub,
+                   std::string n,
+                   std::vector<std::string> generics,
+                   std::vector<FieldDecl> f)
+        : is_public(pub), name(std::move(n)), type_params(std::move(generics)),
+          fields(std::move(f)) {}
+    void accept(StmtVisitor& v) override { v.visitStructDeclStmt(*this); }
 };
 
 struct InterfaceDeclStmt : Stmt {

@@ -102,6 +102,11 @@ private:
                     fail("Duplicate type/interface name '" + type->name + "'");
                 }
                 user_types_[type->name] = type;
+            } else if (auto str = dynamic_cast<StructDeclStmt*>(stmt.get())) {
+                if (user_types_.count(str->name) || interfaces_.count(str->name)) {
+                    fail("Duplicate type/struct/interface name '" + str->name + "'");
+                }
+                user_types_[str->name] = nullptr;  // struct: nominal name only
             } else if (auto iface = dynamic_cast<InterfaceDeclStmt*>(stmt.get())) {
                 if (user_types_.count(iface->name) || interfaces_.count(iface->name)) {
                     fail("Duplicate type/interface name '" + iface->name + "'");
@@ -238,7 +243,8 @@ private:
 
     bool is_known_custom_type(const std::string& name) const {
         return user_types_.count(name) || interfaces_.count(name) ||
-               is_builtin_generic_family(name) || name == "Error";
+               is_builtin_generic_family(name) || name == "Error" ||
+               name == "dict" || name == "Dict";
     }
 
     static bool is_builtin_generic_family(const std::string& name) {
@@ -312,7 +318,7 @@ private:
             "is_balanced", "tensor", "shape", "sum", "mean", "variance",
             "stddev", "min", "max", "dot", "relu", "sigmoid", "softmax",
             "argmax", "risk_score", "Tensor", "sqrt", "pow", "read_text",
-            "write_text", "__spawn"
+            "write_text", "__spawn", "dict", "Dict"
         };
         return builtins.count(name) > 0;
     }
@@ -612,6 +618,30 @@ private:
         CheckedType value = type_expr(e.value.get());
         assign_var(e.name, value);
         last_type_ = value;
+    }
+
+    void visitDictLiteral(DictLiteral& e) override {
+        // Type-check each entry. All keys are string literals at the parser
+        // level, so the resulting type is `dict` (Custom "dict").
+        for (const auto& entry : e.entries) {
+            type_expr(entry.value.get());
+        }
+        last_type_ = CheckedType(CheckedType::Kind::Custom, "dict");
+    }
+
+    void visitStructDeclStmt(StructDeclStmt& s) override {
+        // Structs are type declarations with field types. They're registered
+        // the same way as `type X:` declarations but with the additional
+        // semantic that all fields are required (no method bodies allowed).
+        user_types_[s.name] = nullptr;
+        push_scope();
+        for (const auto& f : s.fields) {
+            CheckedType ft = f.type ? from_annotation(f.type.get())
+                                    : CheckedType::unknown();
+            define_var(f.name, ft);
+        }
+        pop_scope();
+        last_type_ = CheckedType::void_();
     }
 
     void visitSpawnExpr(SpawnExpr& e) override {

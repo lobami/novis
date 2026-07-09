@@ -271,6 +271,7 @@ private:
         if (text == "or")     return TokenType::OR_KW;
         if (text == "not")    return TokenType::NOT_KW;
         if (text == "type")   return TokenType::TYPE_KW;
+        if (text == "struct") return TokenType::STRUCT_KW;
         if (text == "interface") return TokenType::INTERFACE_KW;
         if (text == "pub")    return TokenType::PUB_KW;
         if (text == "impl")   return TokenType::IMPL_KW;

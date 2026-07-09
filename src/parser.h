@@ -82,6 +82,7 @@ private:
         bool is_public = match(TokenType::PUB_KW);
 
         if (check(TokenType::TYPE_KW))      return parse_type_decl(is_public);
+        if (check(TokenType::STRUCT_KW))    return parse_struct_decl(is_public);
         if (check(TokenType::INTERFACE_KW)) return parse_interface_decl(is_public);
         if (check(TokenType::FN_KW))        return parse_function_decl(is_public);
 
@@ -112,6 +113,31 @@ private:
         expect(TokenType::DEDENT, "DEDENT to close type body");
 
         return std::make_unique<TypeDeclStmt>(
+            is_public, name.literal, std::move(type_params), std::move(fields));
+    }
+
+    // `struct X:` is a Pydantic-style data record. The body is the same
+    // field syntax as `type X:`, so we just delegate to parse_type_decl's
+    // inner machinery. We don't allow methods in struct bodies — the field
+    // parser already rejects them because it only looks for `name: type`
+    // followed by NEWLINE.
+    std::unique_ptr<Stmt> parse_struct_decl(bool is_public) {
+        expect(TokenType::STRUCT_KW, "'struct'");
+        const Token& name = expect(TokenType::IDENTIFIER, "struct name");
+        auto type_params = parse_type_params_if_any();
+        expect(TokenType::COLON, "':'");
+        expect(TokenType::NEWLINE, "NEWLINE after struct header");
+        expect(TokenType::INDENT, "INDENT for struct body");
+
+        std::vector<FieldDecl> fields;
+        skip_newlines();
+        while (!check(TokenType::DEDENT) && !is_at_end()) {
+            fields.push_back(parse_field_decl());
+            skip_newlines();
+        }
+        expect(TokenType::DEDENT, "DEDENT to close struct body");
+
+        return std::make_unique<StructDeclStmt>(
             is_public, name.literal, std::move(type_params), std::move(fields));
     }
 
@@ -479,9 +505,48 @@ private:
                 return std::make_unique<TensorLiteral>(std::move(elements));
             }
 
+            case TokenType::LBRACE: {
+                // Dict literal: { "k1": v1, "k2": v2, ... }
+                advance();
+                std::vector<DictLiteralEntry> entries;
+                if (!check(TokenType::RBRACE)) {
+                    auto k = parse_dict_key();
+                    expect(TokenType::COLON, "':' after dict key");
+                    auto v = parse_expression();
+                    entries.emplace_back(std::move(k), std::move(v));
+                    while (match(TokenType::COMMA)) {
+                        if (check(TokenType::RBRACE)) break;
+                        auto k2 = parse_dict_key();
+                        expect(TokenType::COLON, "':' after dict key");
+                        auto v2 = parse_expression();
+                        entries.emplace_back(std::move(k2), std::move(v2));
+                    }
+                }
+                expect(TokenType::RBRACE, "'}' to close dict literal");
+                return std::make_unique<DictLiteral>(std::move(entries));
+            }
+
             default:
                 throw error("Unexpected token '" + tok.literal + "' in expression");
         }
+    }
+
+    // Dict keys can be string literals or identifier-style names. We accept
+    // bare identifiers as a convenience (e.g. {name: "x", age: 7}) so the
+    // JSON-style "key": value is the verbose form, the bareword form is
+    // ergonomic sugar.
+    std::unique_ptr<Expr> parse_dict_key() {
+        if (check(TokenType::STRING_LITERAL)) {
+            std::string lit = current().literal;
+            advance();
+            return std::make_unique<StringLiteral>(unescape_string(lit));
+        }
+        if (check(TokenType::IDENTIFIER)) {
+            std::string lit = current().literal;
+            advance();
+            return std::make_unique<StringLiteral>(lit);
+        }
+        throw error("dict key must be a string or identifier");
     }
 
     // ============================================================ ANNOTATIONS
