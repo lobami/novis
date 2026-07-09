@@ -145,11 +145,11 @@ fi
 
 # -- zynta: end-to-end HTTP server (requires the sibling zynta project) ---
 ZYNTA_DIR="${ZYNTA_DIR:-$ROOT/../zynta}"
-if [[ -x "$ZYNTA_DIR/examples/rest_api.novis" && -f "$ROOT/../zynta/include/zynta_http.h" ]]; then
+if [[ -x "$ZYNTA_DIR/examples/rest_api.zynta" && -f "$ROOT/../zynta/include/zynta_http.h" ]]; then
     # The novis binary must be built with NOVIS_HAS_ZYNTA for this to work.
     # We check by looking for the help text mentioning "zynta-serve".
     if "$NOVIS" --help 2>&1 | grep -q zynta-serve; then
-        "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/rest_api.novis" >/tmp/novis_zynta_serve.log 2>&1 &
+        "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/rest_api.zynta" >/tmp/novis_zynta_serve.log 2>&1 &
         ZYNTA_PID=$!
         # Wait up to 3s for the server to bind on 8080
         for i in 1 2 3 4 5 6; do
@@ -182,9 +182,9 @@ if [[ -x "$ZYNTA_DIR/examples/rest_api.novis" && -f "$ROOT/../zynta/include/zynt
         # this in the test suite by default (it requires the user to have
         # built the novis binary with sqlite3 linked, which the Makefile
         # does when zynta is present), so the check is best-effort.
-        if [[ -f "$ROOT/../zynta/examples/db_smoke.novis" ]]; then
+        if [[ -f "$ROOT/../zynta/examples/db_smoke.zynta" ]]; then
             /Users/loth/.mavis/bin/mavis-trash -- /tmp/zynta_db_smoke.db 2>/dev/null
-            "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/db_smoke.novis" \
+            "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/db_smoke.zynta" \
                 >/tmp/novis_db.log 2>&1 &
             DB_PID=$!
             for i in 1 2 3 4 5 6; do
