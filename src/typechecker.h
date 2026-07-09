@@ -318,7 +318,9 @@ private:
             "is_balanced", "tensor", "shape", "sum", "mean", "variance",
             "stddev", "min", "max", "dot", "relu", "sigmoid", "softmax",
             "argmax", "risk_score", "Tensor", "sqrt", "pow", "read_text",
-            "write_text", "__spawn", "dict", "Dict"
+            "write_text", "__spawn", "dict", "Dict",
+            "zynta_app_new", "zynta_route", "zynta_run",
+            "zynta_json_parse", "zynta_json_stringify"
         };
         return builtins.count(name) > 0;
     }
@@ -449,6 +451,26 @@ private:
             // spawn(fn, arg1, arg2, ...) — at least 1 arg (the callable)
             if (args.empty()) fail("__spawn() expects at least 1 argument");
             return CheckedType(CheckedType::Kind::Custom, "Task");
+        }
+        if (name == "zynta_app_new") {
+            require_arity(name, args, 0);
+            return CheckedType(CheckedType::Kind::Int);
+        }
+        if (name == "zynta_route") {
+            require_arity(name, args, 4);
+            return CheckedType(CheckedType::Kind::Int);
+        }
+        if (name == "zynta_run") {
+            require_arity(name, args, 3);
+            return CheckedType(CheckedType::Kind::Int);
+        }
+        if (name == "zynta_json_parse") {
+            require_arity(name, args, 1);
+            return CheckedType(CheckedType::Kind::Custom, "dict");
+        }
+        if (name == "zynta_json_stringify") {
+            require_arity(name, args, 1);
+            return CheckedType(CheckedType::Kind::Str);
         }
         fail("Unknown builtin '" + name + "'");
         return CheckedType::unknown();

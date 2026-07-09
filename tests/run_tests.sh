@@ -143,6 +143,46 @@ if [[ "$(cat /tmp/novis_struct_dict.out)" != "$expected_struct_dict" ]]; then
   exit 1
 fi
 
+# -- zynta: end-to-end HTTP server (requires the sibling zynta project) ---
+ZYNTA_DIR="${ZYNTA_DIR:-$ROOT/../zynta}"
+if [[ -x "$ZYNTA_DIR/examples/rest_api.novis" && -f "$ROOT/../zynta/include/zynta_http.h" ]]; then
+    # The novis binary must be built with NOVIS_HAS_ZYNTA for this to work.
+    # We check by looking for the help text mentioning "zynta-serve".
+    if "$NOVIS" --help 2>&1 | grep -q zynta-serve; then
+        "$NOVIS" zynta-serve "$ZYNTA_DIR/examples/rest_api.novis" >/tmp/novis_zynta_serve.log 2>&1 &
+        ZYNTA_PID=$!
+        # Wait up to 3s for the server to bind on 8080
+        for i in 1 2 3 4 5 6; do
+            if curl -s --max-time 1 http://127.0.0.1:8080/users >/dev/null 2>&1; then break; fi
+            sleep 0.5
+        done
+        # GET /users
+        got="$(curl -s --max-time 2 http://127.0.0.1:8080/users)"
+        if [[ "$got" != *'"count":0'* ]] || [[ "$got" != *'"users":{}'* ]]; then
+            echo "zynta GET /users output mismatch: $got" >&2
+            kill $ZYNTA_PID 2>/dev/null || true
+            exit 1
+        fi
+        # POST /users with JSON body
+        got="$(curl -s --max-time 2 -X POST -H 'Content-Type: application/json' \
+            -d '{"name":"alice","age":30}' http://127.0.0.1:8080/users)"
+        if [[ "$got" != *'"name":"alice"'* ]] || [[ "$got" != *'"age":30'* ]]; then
+            echo "zynta POST /users output mismatch: $got" >&2
+            kill $ZYNTA_PID 2>/dev/null || true
+            exit 1
+        fi
+        # 404
+        code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:8080/missing)"
+        if [[ "$code" != "404" ]]; then
+            echo "zynta 404 expected, got $code" >&2
+            kill $ZYNTA_PID 2>/dev/null || true
+            exit 1
+        fi
+        kill $ZYNTA_PID 2>/dev/null || true
+        wait $ZYNTA_PID 2>/dev/null || true
+    fi
+fi
+
 # -- Wasm backend (smoke: must run the driver without crashing) -----------
 # The Wasm pipeline is more involved than the others (needs a wasm32
 # toolchain with libcxx). On the dev box it won't actually produce a

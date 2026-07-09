@@ -21,6 +21,35 @@
 #include <future>
 #include <thread>
 
+// Optional zynta integration. The zynta runtime (sibling project) is only
+// linked in when NOVIS_HAS_ZYNTA is defined (set by the Makefile when the
+// ../zynta project is present). When defined, the evaluator exposes five
+// additional builtins: zynta_app_new, zynta_route, zynta_run,
+// zynta_json_parse, zynta_json_stringify. The implementations live in
+// src/zynta_runtime.h.
+//
+// We don't #include zynta_runtime.h here because it would create a
+// circular include (zynta_runtime.h needs Value from this file, and
+// zynta_runtime.h's shims are linked separately by the Makefile). The
+// shim functions are declared forward in this file as plain externs.
+#ifdef NOVIS_HAS_ZYNTA
+#define NOVIS_ZYNTA_ENABLED 1
+// Forward declarations for the zynta shim functions. The actual
+// implementations live in src/zynta_runtime.cpp (linked by Makefile
+// when NOVIS_HAS_ZYNTA is set).
+//
+// We use opaque pointers for the shims that need to return Value so we
+// don't have to forward-declare the variant in the global namespace
+// (which collides with the using-alias defined later in this header).
+// The cast back to Value happens in the .cpp.
+extern "C" int zynta_app_new_impl();
+extern "C" int zynta_route_impl(int app, const std::string& method,
+                                const std::string& path, const std::string& fn);
+extern "C" int zynta_run_impl(int app, const std::string& host, int port);
+extern "C" void* zynta_json_parse_impl(const std::string& s);
+extern "C" std::string zynta_json_stringify_impl(const void* v);
+#endif
+
 // =============================================================================
 // Novis Tree-walking Evaluator
 // =============================================================================
@@ -275,6 +304,50 @@ public:
 
     std::shared_ptr<Environment> current_scope() const { return current_; }
 
+    // Public hook used by zynta: invoke a top-level novis function by name
+    // with a list of evaluated Value arguments. The function must be
+    // defined in the current environment (typically a global fn). Returns
+    // the function's return value, or throws if the name is missing or the
+    // callable isn't a UserFunction.
+    //
+    // We deliberately don't reuse call_user_function because that path
+    // expects `std::vector<std::unique_ptr<Expr>>` (AST nodes). This
+    // method is the "value-in" mirror of that — the callers (like the
+    // zynta builtins) already have Values, not AST nodes.
+    Value call_named_function(const std::string& name,
+                              const std::vector<Value>& args) {
+        if (!current_->isDefined(name)) {
+            throw std::runtime_error("call_named_function: unknown '" + name + "'");
+        }
+        Value v = current_->get(name);
+        auto fn = std::get_if<std::shared_ptr<UserFunction>>(&v);
+        if (!fn || !*fn || !(*fn)->decl) {
+            throw std::runtime_error("call_named_function: '" + name + "' is not a function");
+        }
+        if (args.size() != (*fn)->decl->params.size()) {
+            throw std::runtime_error(
+                "call_named_function: '" + name + "' expects " +
+                std::to_string((*fn)->decl->params.size()) + " args, got " +
+                std::to_string(args.size()));
+        }
+        auto previous = current_;
+        current_ = std::make_shared<Environment>((*fn)->closure);
+        for (std::size_t i = 0; i < (*fn)->decl->params.size(); ++i) {
+            current_->define((*fn)->decl->params[i].name, args[i]);
+        }
+        try {
+            execute_value((*fn)->decl->body.get());
+            current_ = previous;
+            return static_cast<int64_t>(0);
+        } catch (const ReturnSignal& ret) {
+            current_ = previous;
+            return ret.value;
+        } catch (...) {
+            current_ = previous;
+            throw;
+        }
+    }
+
 private:
     std::shared_ptr<Environment> globals_;
     std::shared_ptr<Environment> current_;
@@ -427,6 +500,13 @@ private:
                     if (*sv == "__builtin_read_text__")     { last_expr_value_ = call_read_text(e.args); return; }
                     if (*sv == "__builtin_write_text__")    { last_expr_value_ = call_write_text(e.args); return; }
                     if (*sv == "__builtin___spawn__")        { last_expr_value_ = call_spawn(e.args); return; }
+#ifdef NOVIS_HAS_ZYNTA
+                    if (*sv == "__builtin___zynta_app_new__")      { last_expr_value_ = call_zynta_app_new(); return; }
+                    if (*sv == "__builtin___zynta_route__")       { last_expr_value_ = call_zynta_route(e.args); return; }
+                    if (*sv == "__builtin___zynta_run__")         { last_expr_value_ = call_zynta_run(e.args); return; }
+                    if (*sv == "__builtin___zynta_json_parse__")  { last_expr_value_ = call_zynta_json_parse(e.args); return; }
+                    if (*sv == "__builtin___zynta_json_stringify__"){last_expr_value_ = call_zynta_json_stringify(e.args); return; }
+#endif
                 }
                 if (auto fn = std::get_if<std::shared_ptr<UserFunction>>(&callee)) {
                     last_expr_value_ = call_user_function(*fn, e.args);
@@ -625,6 +705,91 @@ private:
     // Evaluator inside a fresh thread-local instance so we don't have to
     // share `current_` across threads. The shared global environment
     // (built-ins, stdlib) is read-only after construction.
+#ifdef NOVIS_HAS_ZYNTA
+    // The zynta builtins forward here. They all run on the calling thread
+    // (which is fine — zynta_app_new / zynta_route mutate a small static
+    // table, and zynta_run blocks the calling thread on accept()). The
+    // argument vectors come straight from the CallExpr; we evaluate each
+    // argument to a Value before forwarding to the zynta runtime.
+    Value call_zynta_app_new() {
+        return (int64_t)zynta_app_new_impl();
+    }
+    Value call_zynta_route(const std::vector<std::unique_ptr<Expr>>& args) {
+        if (args.size() != 4) {
+            throw std::runtime_error("zynta_route expects (app, method, path, fn_name)");
+        }
+        Value v_app = evaluate(args[0].get());
+        Value v_method = evaluate(args[1].get());
+        Value v_path = evaluate(args[2].get());
+        // args[3] is a fn reference — VariableExpr carrying the fn name.
+        // We don't evaluate it (it would call the function). Instead, we
+        // pull the name from the AST node.
+        std::string fn_name;
+        if (auto* v = dynamic_cast<VariableExpr*>(args[3].get())) {
+            fn_name = v->name;
+        } else {
+            throw std::runtime_error("zynta_route: 4th arg must be a function name");
+        }
+        if (!std::holds_alternative<int64_t>(v_app)) {
+            throw std::runtime_error("zynta_route: app handle must be int");
+        }
+        if (!std::holds_alternative<std::string>(v_method) ||
+            !std::holds_alternative<std::string>(v_path)) {
+            throw std::runtime_error("zynta_route: method and path must be strings");
+        }
+        int app = (int)std::get<int64_t>(v_app);
+        return (int64_t)zynta_route_impl(app, std::get<std::string>(v_method),
+                                         std::get<std::string>(v_path), fn_name);
+    }
+    Value call_zynta_run(const std::vector<std::unique_ptr<Expr>>& args) {
+        if (args.size() != 3) {
+            throw std::runtime_error("zynta_run expects (app, host, port)");
+        }
+        Value v_app = evaluate(args[0].get());
+        Value v_host = evaluate(args[1].get());
+        Value v_port = evaluate(args[2].get());
+        if (!std::holds_alternative<int64_t>(v_app)) {
+            throw std::runtime_error("zynta_run: app handle must be int");
+        }
+        if (!std::holds_alternative<std::string>(v_host)) {
+            throw std::runtime_error("zynta_run: host must be string");
+        }
+        int port = 0;
+        if (std::holds_alternative<int64_t>(v_port)) {
+            port = (int)std::get<int64_t>(v_port);
+        } else if (std::holds_alternative<double>(v_port)) {
+            port = (int)std::get<double>(v_port);
+        } else {
+            throw std::runtime_error("zynta_run: port must be int");
+        }
+        return (int64_t)zynta_run_impl((int)std::get<int64_t>(v_app),
+                                        std::get<std::string>(v_host), port);
+    }
+    Value call_zynta_json_parse(const std::vector<std::unique_ptr<Expr>>& args) {
+        if (args.size() != 1) {
+            throw std::runtime_error("zynta_json_parse expects 1 string arg");
+        }
+        Value v = evaluate(args[0].get());
+        if (!std::holds_alternative<std::string>(v)) {
+            throw std::runtime_error("zynta_json_parse: arg must be string");
+        }
+        // The shim returns a heap-allocated Value* (caller owns). We move
+        // it into a fresh Value and free the heap pointer.
+        void* raw = zynta_json_parse_impl(std::get<std::string>(v));
+        Value* vp = static_cast<Value*>(raw);
+        Value result = std::move(*vp);
+        delete vp;
+        return result;
+    }
+    Value call_zynta_json_stringify(const std::vector<std::unique_ptr<Expr>>& args) {
+        if (args.size() != 1) {
+            throw std::runtime_error("zynta_json_stringify expects 1 arg");
+        }
+        Value v = evaluate(args[0].get());
+        return Value{zynta_json_stringify_impl(&v)};
+    }
+#endif // NOVIS_HAS_ZYNTA
+
     Value call_spawn(const std::vector<std::unique_ptr<Expr>>& args) {
         if (args.empty()) {
             throw std::runtime_error("spawn() expects at least 1 function argument");

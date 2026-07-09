@@ -29,6 +29,9 @@
 #include "typechecker.h"
 #include "llvm.h"
 #include "wasm.h"
+#ifdef NOVIS_HAS_ZYNTA
+#include "zynta_runtime.h"
+#endif
 namespace {
 
 constexpr const char* NOVIS_VERSION = "1.0.0";
@@ -307,6 +310,9 @@ void print_help() {
     std::printf("  novis emit-llvm <file.novis>     # dump textual LLVM IR (.ll) alongside source\n");
     std::printf("  novis llvm <file.novis>          # full LLVM pipeline: C++ -> .ll -> native -> run\n");
     std::printf("  novis wasm <file.novis>          # Wasm32 pipeline: C++ -> .wat -> wasm32 -> run in node\n");
+#ifdef NOVIS_HAS_ZYNTA
+    std::printf("  novis zynta-serve <file.novis>   # REST server via the zynta framework\n");
+#endif
     std::printf("  novis importpy <python-package>  # install native Novis provider facade\n");
     std::printf("  novis importpy --list            # list known Python native providers\n");
     std::printf("  novis env init                   # create isolated .novis environment\n");
@@ -337,6 +343,46 @@ int main(int argc, char** argv) {
         if (command == "llvm")     return LLVMDriver{}.run(in_path);
         if (command == "wasm")     return WasmDriver{}.run(in_path);
     }
+
+#ifdef NOVIS_HAS_ZYNTA
+    if (command == "zynta-serve") {
+        // Run a novis source file that uses the zynta builtins. Same
+        // load + run as the regular `novis run` path, but with the
+        // zynta runtime registered first so calls to zynta_app_new,
+        // zynta_route, zynta_run resolve to the C++ side.
+        if (argc < 3) {
+            std::fprintf(stderr, "error: zynta-serve expects a file\n");
+            return 1;
+        }
+        std::string in_path = argv[2];
+        std::ifstream in(in_path);
+        if (!in) { std::fprintf(stderr, "error: cannot open %s\n", in_path.c_str()); return 1; }
+        std::stringstream ss; ss << in.rdbuf();
+        std::string source = ss.str();
+        Lexer lex(source);
+        std::vector<Token> tokens;
+        for (auto& t : lex.tokenize()) tokens.push_back(std::move(t));
+        Parser parser(tokens);
+        auto program = parser.parse_program();
+        try {
+            TypeChecker tc;
+            tc.check(program);
+        } catch (const std::exception& e) {
+            SourceFile file(in_path, source);
+            std::cerr << file.render_error(e.what());
+            return 1;
+        }
+        Evaluator eval;
+        zynta_runtime::register_zynta_builtins(eval);
+        try {
+            for (const auto& s : program) eval.execute_value(s.get());
+        } catch (const std::exception& e) {
+            std::cerr << "error: " << e.what() << "\n";
+            return 1;
+        }
+        return 0;
+    }
+#endif // NOVIS_HAS_ZYNTA
 
     if (command == "env") {
         NovisEnv env(".");
