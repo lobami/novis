@@ -143,6 +143,30 @@ if [[ "$(cat /tmp/novis_struct_dict.out)" != "$expected_struct_dict" ]]; then
   exit 1
 fi
 
+# -- zynta DB builtins (NOVIS-0011) --------------------------------------
+# End-to-end test for zynta_db_exec / zynta_db_query against a real
+# SQLite file. This is the integration test the NOVIS-0011 commit was
+# missing: it exercises the novis -> zynta_value_from_packed -> sqlite
+# round trip, not just type-checking. The test is only meaningful when
+# the novis binary was built with NOVIS_HAS_ZYNTA (which is automatic
+# when the sibling zynta project is present at ../zynta), and is
+# skipped otherwise.
+if "$NOVIS" --help 2>&1 | grep -q zynta-serve; then
+    ZYNTA_DB_SMOKE_DB="$(mktemp -t novis_zynta_db_smoke.XXXXXX.db)"
+    export ZYNTA_DB_URL="sqlite://$ZYNTA_DB_SMOKE_DB"
+    "$NOVIS" check "$ROOT/tests/zynta_db_smoke.novis" >/dev/null
+    "$NOVIS" run   "$ROOT/tests/zynta_db_smoke.novis" >/tmp/novis_zynta_db.out
+    expected_zynta_db=$'0\n1\n1\n[0, 0]'
+    if [[ "$(cat /tmp/novis_zynta_db.out)" != "$expected_zynta_db" ]]; then
+        echo "zynta_db_smoke output mismatch" >&2
+        cat /tmp/novis_zynta_db.out >&2
+        rm -f "$ZYNTA_DB_SMOKE_DB"
+        exit 1
+    fi
+    rm -f "$ZYNTA_DB_SMOKE_DB"
+    unset ZYNTA_DB_URL
+fi
+
 # -- zynta: end-to-end HTTP server (requires the sibling zynta project) ---
 ZYNTA_DIR="${ZYNTA_DIR:-$ROOT/../zynta}"
 if [[ -x "$ZYNTA_DIR/examples/rest_api.zynta" && -f "$ROOT/../zynta/include/zynta_http.h" ]]; then

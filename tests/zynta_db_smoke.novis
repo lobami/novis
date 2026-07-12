@@ -1,0 +1,42 @@
+# =============================================================================
+# zynta_db_smoke.novis — integration smoke test for the NOVIS-0011 builtins
+# (zynta_db_exec / zynta_db_query). Verifies that the novis -> zynta DB
+# bridge actually works end-to-end against a real SQLite database.
+#
+# The test is run from tests/run_tests.sh with ZYNTA_DB_URL pointing at a
+# unique tempfile, so successive runs don't see stale rows. The test prints
+# four lines to stdout; the harness compares them byte-for-byte against
+# the expected literal.
+#
+# Important runtime notes (so future readers know why the output looks
+# the way it does):
+#   * zynta_db_exec returns the affected row count (sqlite3_changes).
+#   * zynta_db_query returns a zynta::Value of kind=Array, which the
+#     novis runtime currently down-converts to a 1-D Tensor of doubles
+#     (one element per row, value 0.0 for any non-numeric cell). This
+#     means we can't read column data from inside novis yet, but the
+#     *cardinality* (number of elements) of the returned Tensor is
+#     faithful to the SQL result, which is what this test asserts.
+#   * We use print() + a literal expected string instead of an
+#     assert() because the runtime has no assert builtin yet.
+# =============================================================================
+
+# Schema bootstrap: CREATE TABLE is idempotent in SQLite, so this also
+# makes the test re-runnable against a fresh temp DB without an explicit
+# drop. Row count is 0 because no rows changed.
+schema_changes: int = zynta_db_exec("CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)")
+print(schema_changes)
+
+# Insert two rows. Each INSERT reports 1 affected row.
+insert_alice: int = zynta_db_exec("INSERT INTO users(name, age) VALUES('alice', 30)")
+print(insert_alice)
+
+insert_bob: int = zynta_db_exec("INSERT INTO users(name, age) VALUES('bob', 25)")
+print(insert_bob)
+
+# Query — should return 2 rows. From novis we can only observe cardinality,
+# but cardinality is the canonical invariant a DB integration test should
+# pin down. If the bridge ever silently drops rows or panics, this test
+# catches it. Each non-numeric cell becomes 0.0 in the current conversion.
+rows: list = zynta_db_query("SELECT id, name, age FROM users ORDER BY id")
+print(rows)
