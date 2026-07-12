@@ -269,6 +269,29 @@ public:
         define_builtin("pow");
         define_builtin("read_text");
         define_builtin("write_text");
+#ifdef NOVIS_HAS_ZYNTA
+        // NOVIS-0011: zynta integration builtins. These names must be
+        // registered as sentinels so visitCallExpr's dispatch table
+        // (the if-ladder that matches "__builtin___zynta_*__") can
+        // route user calls like zynta_app_new() / zynta_db_query(...)
+        // to the call_zynta_* methods below. Without these registrations,
+        // every zynta call lands in the catch-all
+        // "Call to non-function or undefined function" branch.
+        //
+        // We can't use define_builtin() here because it produces
+        // "__builtin_<name>__" (two underscores around the name),
+        // while the dispatch table above matches "__builtin___<name>__"
+        // (three underscores — see the __spawn entry right below).
+        // We follow the __spawn convention: register the sentinel
+        // string directly.
+        globals_->define("zynta_app_new",       Value{std::string("__builtin___zynta_app_new__")});
+        globals_->define("zynta_route",         Value{std::string("__builtin___zynta_route__")});
+        globals_->define("zynta_run",           Value{std::string("__builtin___zynta_run__")});
+        globals_->define("zynta_json_parse",    Value{std::string("__builtin___zynta_json_parse__")});
+        globals_->define("zynta_json_stringify",Value{std::string("__builtin___zynta_json_stringify__")});
+        globals_->define("zynta_db_query",      Value{std::string("__builtin___zynta_db_query__")});
+        globals_->define("zynta_db_exec",       Value{std::string("__builtin___zynta_db_exec__")});
+#endif
         // Async runtime builtin: spawn(expr) -> Task<T>, resolved by call_spawn.
         globals_->define("__spawn", Value{std::string("__builtin___spawn__")});
     }
